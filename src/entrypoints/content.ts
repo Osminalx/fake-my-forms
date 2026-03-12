@@ -16,7 +16,7 @@ function fillInput(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
-export function fillAllInputs(config: FakerConfig) {
+function fillAllInputs(config: FakerConfig) {
   const inputs = document.querySelectorAll<HTMLInputElement>(
     'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea',
   );
@@ -33,18 +33,23 @@ export function fillAllInputs(config: FakerConfig) {
   });
 }
 
-// Listen popups messages
-browser.runtime.onMessage.addListener((message) => {
-  if (message.type === "FILL_FORM") {
-    fillAllInputs(message.config);
-  }
-});
-
-// Listen keyboard shortcut
-document.addEventListener("keydown", (e) => {
-  if (e.altKey && e.shiftKey && e.key === "F") {
-    browser.storage.sync.get("fakerConfig", ({ fakerConfig }) => {
-      fillAllInputs(fakerConfig ?? {});
+export default defineContentScript({
+  matches: ["<all_urls>"],
+  main() {
+    // Listen popup messages
+    browser.runtime.onMessage.addListener((message) => {
+      if (message.type === "FILL_FORM") {
+        fillAllInputs(message.config);
+      }
     });
-  }
+
+    // Listen keyboard shortcut
+    document.addEventListener("keydown", (e) => {
+      if (e.altKey && e.shiftKey && e.key === "F") {
+        browser.storage.sync.get("fakerConfig", ({ fakerConfig }) => {
+          fillAllInputs(fakerConfig ?? {});
+        });
+      }
+    });
+  },
 });
