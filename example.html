@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>FakeIt – Popup Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0d0f;
+    --surface: #161618;
+    --surface2: #1e1e22;
+    --border: #2a2a30;
+    --accent: #00e5a0;
+    --accent-dim: #00e5a022;
+    --accent2: #7b61ff;
+    --text: #f0f0f5;
+    --muted: #6b6b80;
+    --danger: #ff4d6d;
+    --warn: #ffbe0b;
+  }
+
+  body {
+    background: #1a1a2e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .popup {
+    width: 380px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px #00000080, 0 0 0 1px #ffffff08;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    padding: 16px 18px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo {
+    width: 30px; height: 30px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+    box-shadow: 0 0 16px #00e5a055;
+  }
+  .header-text { flex: 1; }
+  .header-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 15px;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+  .header-sub {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 1px;
+    letter-spacing: 0.5px;
+  }
+  .kbd {
+    font-size: 9px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 5px;
+    letter-spacing: 0.3px;
+    background: var(--surface2);
+  }
+
+  /* ── STATS BAR ── */
+  .stats {
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent-dim);
+    border-bottom: 1px solid #00e5a018;
+  }
+  .stats-dot {
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .stats-text { font-size: 11px; color: var(--accent); flex: 1; }
+  .stats-count {
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .stats-count span { color: var(--text); font-weight: 600; }
+
+  /* ── LOCALE ROW ── */
+  .locale-row {
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .locale-label { font-size: 11px; color: var(--muted); flex: 1; }
+  .locale-select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  .locale-select:focus { border-color: var(--accent); }
+
+  /* ── FILL BUTTON ── */
+  .fill-btn-wrap { padding: 14px 18px 10px; }
+  .fill-btn {
+    width: 100%;
+    padding: 12px;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 14px;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all .15s;
+    box-shadow: 0 4px 20px #00e5a033;
+    position: relative;
+    overflow: hidden;
+  }
+  .fill-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #ffffff22 0%, transparent 60%);
+  }
+  .fill-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 28px #00e5a055; }
+  .fill-btn:active { transform: translateY(0); }
+  .fill-btn-icon { font-size: 16px; }
+
+  /* ── TABS ── */
+  .tabs {
+    display: flex;
+    padding: 0 18px;
+    gap: 2px;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    font-size: 11px;
+    color: var(--muted);
+    padding: 8px 10px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all .15s;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0.3px;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── CONFIG TABLE ── */
+  .config-wrap {
+    max-height: 260px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .table-header {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    padding: 6px 18px;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 1;
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    align-items: start;
+    padding: 10px 18px;
+    border-bottom: 1px solid #ffffff06;
+    gap: 10px;
+    transition: background .1s;
+  }
+  .field-row:hover { background: var(--surface2); }
+
+  .field-type {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-top: 2px;
+  }
+  .field-icon { font-size: 13px; }
+  .field-name { font-size: 11px; color: var(--text); }
+
+  .field-values { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .value-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 10px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    max-width: 120px;
+  }
+  .value-chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 90px;
+  }
+  .value-chip-rm {
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .value-chip-rm:hover { color: var(--danger); }
+
+  .faker-badge {
+    font-size: 10px;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .add-value-row {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+    margin-top: 2px;
+  }
+  .add-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 3px 6px;
+    outline: none;
+    min-width: 0;
+    transition: border-color .15s;
+  }
+  .add-input:focus { border-color: var(--accent2); }
+  .add-input::placeholder { color: var(--muted); }
+  .add-btn {
+    background: var(--accent2);
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 13px;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: opacity .15s;
+  }
+  .add-btn:hover { opacity: 0.85; }
+
+  /* ── FOOTER ── */
+  .footer {
+    padding: 10px 18px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+  }
+  .footer-hint { font-size: 10px; color: var(--muted); }
+  .footer-hint span { color: var(--text); }
+  .clear-btn {
+    font-size: 10px;
+    color: var(--muted);
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 3px 8px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    transition: all .15s;
+  }
+  .clear-btn:hover { color: var(--danger); border-color: var(--danger); }
+
+  /* fill animation */
+  .fill-btn.filling { animation: flash .4s ease; }
+  @keyframes flash {
+    0%   { background: var(--accent); }
+    50%  { background: #fff; }
+    100% { background: var(--accent); }
+  }
+</style>
+</head>
+<body>
+
+<div class="popup">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">⚡</div>
+    <div class="header-text">
+      <div class="header-title">FakeIt</div>
+      <div class="header-sub">form autofill & faker</div>
+    </div>
+    <span class="kbd">Alt+Shift+F</span>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stats-dot"></div>
+    <div class="stats-text">inputs detected on page</div>
+    <div class="stats-count"><span id="inputCount">7</span> fields</div>
+  </div>
+
+  <!-- LOCALE -->
+  <div class="locale-row">
+    <span class="locale-label">faker locale</span>
+    <select class="locale-select" id="localeSelect">
+      <option value="en">🇺🇸 en</option>
+      <option value="es" selected>🇪🇸 es</option>
+      <option value="de">🇩🇪 de</option>
+      <option value="fr">🇫🇷 fr</option>
+      <option value="pt_BR">🇧🇷 pt_BR</option>
+      <option value="ja">🇯🇵 ja</option>
+    </select>
+  </div>
+
+  <!-- FILL BUTTON -->
+  <div class="fill-btn-wrap">
+    <button class="fill-btn" id="fillBtn">
+      <span class="fill-btn-icon">⚡</span>
+      Fill All Inputs
+    </button>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" data-tab="config">Custom Values</button>
+    <button class="tab" data-tab="about">About</button>
+  </div>
+
+  <!-- CONFIG TABLE -->
+  <div id="tab-config">
+    <div class="table-header">
+      <div>TYPE</div>
+      <div>VALUE</div>
+    </div>
+    <div class="config-wrap" id="fieldList"></div>
+  </div>
+
+  <!-- ABOUT TAB (hidden) -->
+  <div id="tab-about" style="display:none; padding: 18px; font-size: 11px; color: var(--muted); line-height: 1.8;">
+    <p style="color:var(--text); margin-bottom:8px;">FakeIt v0.1.0</p>
+    <p>Click the icon or press <span style="color:var(--accent)">Alt+Shift+F</span> to fill all inputs with fake data.</p>
+    <br/>
+    <p>Custom values override faker defaults. Empty = auto-generated.</p>
+    <br/>
+    <p style="color:var(--accent2)">Built with WXT + Svelte + faker-js</p>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <span class="footer-hint">shortcut: <span>Alt+Shift+F</span></span>
+    <button class="clear-btn" id="clearBtn">clear all</button>
+  </div>
+
+</div>
+
+<script>
+const FIELDS = [
+  { type: 'email',     icon: '📧', label: 'email' },
+  { type: 'firstName', icon: '👤', label: 'firstName' },
+  { type: 'lastName',  icon: '👤', label: 'lastName' },
+  { type: 'phone',     icon: '📞', label: 'phone' },
+  { type: 'address',   icon: '🏠', label: 'address' },
+  { type: 'city',      icon: '🌆', label: 'city' },
+  { type: 'zipCode',   icon: '📮', label: 'zipCode' },
+  { type: 'company',   icon: '🏢', label: 'company' },
+  { type: 'username',  icon: '🔑', label: 'username' },
+  { type: 'password',  icon: '🔒', label: 'password' },
+]
+
+// State: customValues per field type
+const state = {}
+FIELDS.forEach(f => state[f.type] = [])
+
+function renderFields() {
+  const list = document.getElementById('fieldList')
+  list.innerHTML = ''
+  FIELDS.forEach(f => {
+    const row = document.createElement('div')
+    row.className = 'field-row'
+    const values = state[f.type]
+
+    const chipsHtml = values.length > 0
+      ? values.map((v, i) => `
+          <div class="value-chip">
+            <span class="value-chip-text" title="${v}">${v}</span>
+            <span class="value-chip-rm" data-type="${f.type}" data-idx="${i}">✕</span>
+          </div>`).join('')
+      : `<span class="faker-badge">auto (faker)</span>`
+
+    row.innerHTML = `
+      <div class="field-type">
+        <span class="field-icon">${f.icon}</span>
+        <span class="field-name">${f.label}</span>
+      </div>
+      <div>
+        <div class="field-values">${chipsHtml}</div>
+        <div class="add-value-row" style="margin-top:6px">
+          <input class="add-input" placeholder="add custom value…" data-type="${f.type}" />
+          <button class="add-btn" data-type="${f.type}">+</button>
+        </div>
+      </div>
+    `
+    list.appendChild(row)
+  })
+
+  // Remove chip
+  list.querySelectorAll('.value-chip-rm').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const { type, idx } = btn.dataset
+      state[type].splice(parseInt(idx), 1)
+      renderFields()
+    })
+  })
+
+  // Add value on button click
+  list.querySelectorAll('.add-btn').forEach(btn => {
+    btn.addEventListener('click', () => addValue(btn.dataset.type, btn))
+  })
+
+  // Add value on Enter
+  list.querySelectorAll('.add-input').forEach(input => {
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') addValue(input.dataset.type, input)
+    })
+  })
+}
+
+function addValue(type, triggerEl) {
+  const row = triggerEl.closest('.add-value-row')
+  const input = row.querySelector('.add-input')
+  const val = input.value.trim()
+  if (!val) return
+  state[type].push(val)
+  input.value = ''
+  renderFields()
+  // re-focus same field
+  const newInput = document.querySelector(`.add-input[data-type="${type}"]`)
+  newInput?.focus()
+}
+
+// Tabs
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+    tab.classList.add('active')
+    document.getElementById('tab-config').style.display = tab.dataset.tab === 'config' ? '' : 'none'
+    document.getElementById('tab-about').style.display  = tab.dataset.tab === 'about'  ? '' : 'none'
+  })
+})
+
+// Fill button animation
+document.getElementById('fillBtn').addEventListener('click', () => {
+  const btn = document.getElementById('fillBtn')
+  btn.classList.add('filling')
+  btn.textContent = '✓ Filled!'
+  setTimeout(() => {
+    btn.classList.remove('filling')
+    btn.innerHTML = '<span class="fill-btn-icon">⚡</span> Fill All Inputs'
+  }, 1200)
+})
+
+// Clear all
+document.getElementById('clearBtn').addEventListener('click', () => {
+  FIELDS.forEach(f => state[f.type] = [])
+  renderFields()
+})
+
+renderFields()
+</script>
+</body>
+</html>

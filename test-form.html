@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fake My Forms - Test Form</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+      }
+
+      body {
+        font-family: Inter, Arial, sans-serif;
+        margin: 0;
+        padding: 24px;
+        background: #f5f7fb;
+        color: #111827;
+      }
+
+      .card {
+        max-width: 640px;
+        margin: 0 auto;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 20px;
+      }
+
+      p {
+        margin: 0 0 16px;
+        color: #4b5563;
+        font-size: 14px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .field.full {
+        grid-column: 1 / -1;
+      }
+
+      label {
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      input,
+      textarea {
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 14px;
+        background: #fff;
+      }
+
+      textarea {
+        min-height: 90px;
+        resize: vertical;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Quick Extension Test Form</h1>
+      <p>Open your extension popup or press <strong>Alt+Shift+F</strong>.</p>
+
+      <form class="grid" autocomplete="on">
+        <div class="field">
+          <label for="firstName">First name</label>
+          <input id="firstName" name="firstName" autocomplete="given-name" />
+        </div>
+
+        <div class="field">
+          <label for="lastName">Last name</label>
+          <input id="lastName" name="lastName" autocomplete="family-name" />
+        </div>
+
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" />
+        </div>
+
+        <div class="field">
+          <label for="phone">Phone</label>
+          <input id="phone" name="phone" type="tel" autocomplete="tel" />
+        </div>
+
+        <div class="field full">
+          <label for="address">Address</label>
+          <input id="address" name="address" autocomplete="street-address" />
+        </div>
+
+        <div class="field">
+          <label for="city">City</label>
+          <input id="city" name="city" autocomplete="address-level2" />
+        </div>
+
+        <div class="field">
+          <label for="zipCode">ZIP code</label>
+          <input id="zipCode" name="zipCode" autocomplete="postal-code" />
+        </div>
+
+        <div class="field">
+          <label for="company">Company</label>
+          <input id="company" name="company" autocomplete="organization" />
+        </div>
+
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" name="username" autocomplete="username" />
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="new-password" />
+        </div>
+
+        <div class="field full">
+          <label for="notes">Notes</label>
+          <textarea id="notes" name="notes" placeholder="Any random text..."></textarea>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

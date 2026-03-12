@@ -33,6 +33,31 @@ function fillAllInputs(config: FakerConfig) {
   });
 }
 
+async function getStoredFakerConfig(): Promise<FakerConfig> {
+  const storage = browser.storage;
+  if (!storage) return {};
+
+  try {
+    if (storage.sync) {
+      const { fakerConfig } = await storage.sync.get("fakerConfig");
+      return (fakerConfig ?? {}) as FakerConfig;
+    }
+  } catch (error) {
+    console.warn("[fake-my-forms] Failed reading sync storage:", error);
+  }
+
+  try {
+    if (storage.local) {
+      const { fakerConfig } = await storage.local.get("fakerConfig");
+      return (fakerConfig ?? {}) as FakerConfig;
+    }
+  } catch (error) {
+    console.warn("[fake-my-forms] Failed reading local storage:", error);
+  }
+
+  return {};
+}
+
 export default defineContentScript({
   matches: ["<all_urls>"],
   main() {
@@ -44,11 +69,10 @@ export default defineContentScript({
     });
 
     // Listen keyboard shortcut
-    document.addEventListener("keydown", (e) => {
+    document.addEventListener("keydown", async (e) => {
       if (e.altKey && e.shiftKey && e.key === "F") {
-        browser.storage.sync.get("fakerConfig", ({ fakerConfig }) => {
-          fillAllInputs(fakerConfig ?? {});
-        });
+        const fakerConfig = await getStoredFakerConfig();
+        fillAllInputs(fakerConfig);
       }
     });
   },
