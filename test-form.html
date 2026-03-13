@@ -18,8 +18,8 @@
       }
 
       .card {
-        max-width: 640px;
-        margin: 0 auto;
+        max-width: 760px;
+        margin: 0 auto 24px;
         background: #ffffff;
         border: 1px solid #e5e7eb;
         border-radius: 12px;
@@ -32,10 +32,32 @@
         font-size: 20px;
       }
 
+      h2 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        color: #374151;
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 6px;
+      }
+
       p {
         margin: 0 0 16px;
         color: #4b5563;
         font-size: 14px;
+      }
+
+      .section-label {
+        display: inline-block;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: #6b7280;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        padding: 2px 7px;
+        margin-bottom: 10px;
       }
 
       .grid {
@@ -60,24 +82,40 @@
       }
 
       input,
+      select,
       textarea {
         border: 1px solid #d1d5db;
         border-radius: 8px;
         padding: 10px 12px;
         font-size: 14px;
         background: #fff;
+        color: #111827;
+        width: 100%;
+        box-sizing: border-box;
       }
 
       textarea {
         min-height: 90px;
         resize: vertical;
       }
+
+      .hint {
+        font-size: 11px;
+        color: #9ca3af;
+        font-family: monospace;
+      }
     </style>
   </head>
   <body>
+
+    <!-- ===================================================================
+         SECTION 1: Standard happy-path form (autocomplete + name + id)
+         Tests: autocomplete token priority, all common field types
+    ==================================================================== -->
     <main class="card">
       <h1>Quick Extension Test Form</h1>
       <p>Open your extension popup or press <strong>Alt+Shift+F</strong>.</p>
+      <span class="section-label">Standard — autocomplete + name + id</span>
 
       <form class="grid" autocomplete="on">
         <div class="field">
@@ -111,8 +149,18 @@
         </div>
 
         <div class="field">
+          <label for="state">State / Province</label>
+          <input id="state" name="state" autocomplete="address-level1" />
+        </div>
+
+        <div class="field">
           <label for="zipCode">ZIP code</label>
           <input id="zipCode" name="zipCode" autocomplete="postal-code" />
+        </div>
+
+        <div class="field">
+          <label for="country">Country</label>
+          <input id="country" name="country" autocomplete="country-name" />
         </div>
 
         <div class="field">
@@ -130,11 +178,296 @@
           <input id="password" name="password" type="password" autocomplete="new-password" />
         </div>
 
+        <div class="field">
+          <label for="birthdate">Date of birth</label>
+          <input id="birthdate" name="dob" type="date" autocomplete="bday" />
+        </div>
+
+        <div class="field">
+          <label for="age">Age</label>
+          <input id="age" name="age" type="number" min="1" max="120" />
+        </div>
+
         <div class="field full">
           <label for="notes">Notes</label>
           <textarea id="notes" name="notes" placeholder="Any random text..."></textarea>
         </div>
       </form>
     </main>
+
+    <!-- ===================================================================
+         SECTION 2: Compound autocomplete tokens
+         Tests: "billing given-name", "shipping postal-code", etc.
+    ==================================================================== -->
+    <section class="card">
+      <h2>Compound autocomplete tokens</h2>
+      <p class="hint">autocomplete="billing given-name", "shipping postal-code" …</p>
+      <span class="section-label">autocomplete — compound tokens</span>
+
+      <form class="grid" autocomplete="on">
+        <div class="field">
+          <label for="billing-first">Billing first name</label>
+          <input id="billing-first" autocomplete="billing given-name" />
+          <span class="hint">autocomplete="billing given-name"</span>
+        </div>
+
+        <div class="field">
+          <label for="billing-last">Billing last name</label>
+          <input id="billing-last" autocomplete="billing family-name" />
+          <span class="hint">autocomplete="billing family-name"</span>
+        </div>
+
+        <div class="field">
+          <label for="shipping-zip">Shipping ZIP</label>
+          <input id="shipping-zip" autocomplete="shipping postal-code" />
+          <span class="hint">autocomplete="shipping postal-code"</span>
+        </div>
+
+        <div class="field">
+          <label for="billing-email">Billing email</label>
+          <input id="billing-email" type="email" autocomplete="billing email" />
+          <span class="hint">autocomplete="billing email"</span>
+        </div>
+
+        <div class="field">
+          <label for="cc-name">Cardholder name</label>
+          <input id="cc-name" autocomplete="cc-name" />
+          <span class="hint">autocomplete="cc-name"</span>
+        </div>
+
+        <div class="field">
+          <label for="cc-exp">Card expiry</label>
+          <input id="cc-exp" autocomplete="cc-exp" placeholder="MM/YY" />
+          <span class="hint">autocomplete="cc-exp"</span>
+        </div>
+      </form>
+    </section>
+
+    <!-- ===================================================================
+         SECTION 3: ARIA-only signals (no name / no autocomplete)
+         Tests: aria-label priority, aria-labelledby lookup
+    ==================================================================== -->
+    <section class="card">
+      <h2>ARIA-only signals</h2>
+      <p class="hint">Fields have no name/id/autocomplete — only aria-label or aria-labelledby.</p>
+      <span class="section-label">ARIA — aria-label &amp; aria-labelledby</span>
+
+      <form class="grid">
+        <!-- aria-label only -->
+        <div class="field">
+          <input aria-label="Email address" placeholder="email…" />
+          <span class="hint">aria-label="Email address"</span>
+        </div>
+
+        <div class="field">
+          <input aria-label="First name" placeholder="first name…" />
+          <span class="hint">aria-label="First name"</span>
+        </div>
+
+        <div class="field">
+          <input aria-label="Last name" placeholder="last name…" />
+          <span class="hint">aria-label="Last name"</span>
+        </div>
+
+        <div class="field">
+          <input aria-label="Phone number" placeholder="phone…" />
+          <span class="hint">aria-label="Phone number"</span>
+        </div>
+
+        <div class="field">
+          <input aria-label="Contraseña" type="password" placeholder="password…" />
+          <span class="hint">aria-label="Contraseña" (Spanish)</span>
+        </div>
+
+        <div class="field">
+          <input aria-label="Ciudad" placeholder="city…" />
+          <span class="hint">aria-label="Ciudad" (Spanish)</span>
+        </div>
+
+        <!-- aria-labelledby -->
+        <div class="field">
+          <span id="lbl-company" style="font-size:13px;font-weight:600;">Company</span>
+          <input aria-labelledby="lbl-company" placeholder="company…" />
+          <span class="hint">aria-labelledby="lbl-company"</span>
+        </div>
+
+        <div class="field">
+          <span id="lbl-username" style="font-size:13px;font-weight:600;">Username</span>
+          <input aria-labelledby="lbl-username" placeholder="username…" />
+          <span class="hint">aria-labelledby="lbl-username"</span>
+        </div>
+
+        <div class="field">
+          <span id="lbl-zip" style="font-size:13px;font-weight:600;">Código postal</span>
+          <input aria-labelledby="lbl-zip" placeholder="zip…" />
+          <span class="hint">aria-labelledby="lbl-zip" (Spanish)</span>
+        </div>
+      </form>
+    </section>
+
+    <!-- ===================================================================
+         SECTION 4: Label-wrapped inputs (input inside <label>)
+         Tests: closest('label') strategy in getLabelText()
+    ==================================================================== -->
+    <section class="card">
+      <h2>Label-wrapped inputs</h2>
+      <p class="hint">Input is a child of its &lt;label&gt; — no for/id relationship needed.</p>
+      <span class="section-label">label wrapping — no for/id</span>
+
+      <form class="grid">
+        <div class="field">
+          <label>
+            Email address
+            <input type="text" placeholder="email…" />
+          </label>
+          <span class="hint">input inside &lt;label&gt;Email address&lt;/label&gt;</span>
+        </div>
+
+        <div class="field">
+          <label>
+            First name
+            <input type="text" placeholder="first name…" />
+          </label>
+          <span class="hint">input inside &lt;label&gt;First name&lt;/label&gt;</span>
+        </div>
+
+        <div class="field">
+          <label>
+            Apellido
+            <input type="text" placeholder="apellido…" />
+          </label>
+          <span class="hint">input inside &lt;label&gt;Apellido&lt;/label&gt; (Spanish)</span>
+        </div>
+
+        <div class="field">
+          <label>
+            Phone number
+            <input type="text" placeholder="phone…" />
+          </label>
+          <span class="hint">input inside &lt;label&gt;Phone number&lt;/label&gt;</span>
+        </div>
+      </form>
+    </section>
+
+    <!-- ===================================================================
+         SECTION 5: data-* attribute hints (no other signals)
+         Tests: getDataAttributeHint() strategy
+    ==================================================================== -->
+    <section class="card">
+      <h2>data-* attribute hints</h2>
+      <p class="hint">No label/name/autocomplete — field type detected via data-testid, data-cy, etc.</p>
+      <span class="section-label">data-* — testid / cy / field / name</span>
+
+      <form class="grid">
+        <div class="field">
+          <input data-testid="email-input" placeholder="…" />
+          <span class="hint">data-testid="email-input"</span>
+        </div>
+
+        <div class="field">
+          <input data-cy="phone-field" placeholder="…" />
+          <span class="hint">data-cy="phone-field"</span>
+        </div>
+
+        <div class="field">
+          <input data-test="firstName" placeholder="…" />
+          <span class="hint">data-test="firstName"</span>
+        </div>
+
+        <div class="field">
+          <input data-field="address" placeholder="…" />
+          <span class="hint">data-field="address"</span>
+        </div>
+
+        <div class="field">
+          <input data-name="zipCode" placeholder="…" />
+          <span class="hint">data-name="zipCode"</span>
+        </div>
+
+        <div class="field">
+          <input data-testid="password-field" type="password" placeholder="…" />
+          <span class="hint">data-testid="password-field"</span>
+        </div>
+
+        <div class="field">
+          <input data-cy="company-input" placeholder="…" />
+          <span class="hint">data-cy="company-input"</span>
+        </div>
+
+        <div class="field">
+          <input data-field="username" placeholder="…" />
+          <span class="hint">data-field="username"</span>
+        </div>
+      </form>
+    </section>
+
+    <!-- ===================================================================
+         SECTION 6: Select and textarea elements
+         Tests: getLabelText() works for non-input elements
+    ==================================================================== -->
+    <section class="card">
+      <h2>Select &amp; Textarea</h2>
+      <p class="hint">label[for] association on non-input elements.</p>
+      <span class="section-label">select &amp; textarea</span>
+
+      <form class="grid">
+        <div class="field">
+          <label for="sel-country">Country</label>
+          <select id="sel-country" name="country" autocomplete="country">
+            <option value="">Select…</option>
+            <option value="US">United States</option>
+            <option value="MX">Mexico</option>
+            <option value="ES">Spain</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="sel-state">State</label>
+          <select id="sel-state" name="state" autocomplete="address-level1">
+            <option value="">Select…</option>
+            <option value="CA">California</option>
+            <option value="TX">Texas</option>
+          </select>
+        </div>
+
+        <div class="field full">
+          <label for="bio">Biography</label>
+          <textarea id="bio" name="bio" placeholder="Tell us about yourself…"></textarea>
+        </div>
+      </form>
+    </section>
+
+    <!-- ===================================================================
+         SECTION 7: Priority conflict scenarios
+         Tests: higher-priority signal wins over lower-priority one
+    ==================================================================== -->
+    <section class="card">
+      <h2>Priority conflict scenarios</h2>
+      <p class="hint">autocomplete beats label; label beats name/id; data-* beats name/id.</p>
+      <span class="section-label">signal priority</span>
+
+      <form class="grid">
+        <!-- autocomplete=email but label says "Username" → should fill as email -->
+        <div class="field">
+          <label for="conflict-1">Username</label>
+          <input id="conflict-1" autocomplete="email" />
+          <span class="hint">label="Username" but autocomplete="email" → email wins</span>
+        </div>
+
+        <!-- label says "Email" but name="username" → label wins -->
+        <div class="field">
+          <label for="conflict-2">Email address</label>
+          <input id="conflict-2" name="username" />
+          <span class="hint">label="Email address", name="username" → label wins</span>
+        </div>
+
+        <!-- data-testid says "phone" but name="email" → data-* wins over name/id -->
+        <div class="field">
+          <input data-testid="phone-field" name="email_addr" />
+          <span class="hint">data-testid="phone-field", name="email_addr" → data-* wins</span>
+        </div>
+      </form>
+    </section>
+
   </body>
 </html>

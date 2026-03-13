@@ -149,11 +149,11 @@ function getDataAttributeHint(input: HTMLInputElement): string {
 // NOTA: Se去掉 acentos para mejor matching
 const FIELD_PATTERNS: Record<FieldType, RegExp> = {
   email: /email|correo/i,
-  firstName: /first.?name|nom(?:bre)?(?:de)?(?:primer)?|fname|pr(?:imer)?(?:nombre)?/i,
+  firstName: /first.?name|nom(?:bre)?(?:de)?(?:primer)?|fname|primer(?:nombre)?/i,
   lastName: /last.?name|apellido|lname|segundo(?:nombre)?|apellidos?/i,
   name: /^name$|full.?name|nom(?:bre)?(?:completo)?|nombre/i,
   phone: /phone|tel[eé]?fono?|mobile|cel(?:ular)?|whatsapp/i,
-  address: /address|direcci[oó]n|street|domicilio|calle|num(?:ero)?|n[°o]?/i,
+  address: /address|direcci[oó]n|street|domicilio|calle|\bnum(?:ero)?\b|n[°º]/i,
   city: /city|ciudad|poblaci[oó]n|municipio/i,
   state: /state|provincia|estado|regi[oó]n/i,
   country: /country|pa[ií]s|nacionalidad/i,
@@ -162,7 +162,7 @@ const FIELD_PATTERNS: Record<FieldType, RegExp> = {
   username: /user(?:name)?|usuario|login|account/i,
   password: /pass(?:word)?|contrase[nñ]a|clave|pin/i,
   date: /date|fecha|dob|birth(?:day)?|nacimiento/i,
-  number: /number|cantidad|amount|count|cant|monto|edad|age/i,
+  number: /number|cantidad|amount|count|cant|monto|edad|\bage\b/i,
   text: /.*/,
   unknown: /.*/,
 };

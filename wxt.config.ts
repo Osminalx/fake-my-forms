@@ -6,5 +6,10 @@ export default defineConfig({
   modules: ['@wxt-dev/module-svelte'],
   manifest: {
     permissions: ['storage'],
+    browser_specific_settings: {
+      gecko: {
+        id: 'fake-my-forms@extension.local',
+      },
+    },
   },
 });
