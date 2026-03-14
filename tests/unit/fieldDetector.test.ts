@@ -86,9 +86,9 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
   });
 
   // NOTE: ^name$ in FIELD_PATTERNS won't match because the signal string always
-  // starts with input.type ("text"), so a bare id="name" falls through to "text".
-  it("id='name' alone returns 'text' (^name$ does not match multi-word signal)", () => {
-    expect(detectFieldType(makeInput({ id: "name" }))).toBe("text");
+  // starts with input.type ("text"), so a bare id="name" falls through to "unknown".
+  it("id='name' alone returns 'unknown' (^name$ does not match multi-word signal)", () => {
+    expect(detectFieldType(makeInput({ id: "name" }))).toBe("unknown");
   });
 
   // "fullName" contains the substring "lname" which matches the lastName pattern
@@ -217,18 +217,18 @@ describe("detectFieldType — aria-label and autocomplete signals", () => {
 });
 
 // ---------------------------------------------------------------------------
-// EXISTING TESTS — text fallback
+// EXISTING TESTS — unknown fallback (no fill when type can't be detected)
 // ---------------------------------------------------------------------------
-describe("detectFieldType — text fallback", () => {
-  it("returns text for a plain input with no hints", () => {
+describe("detectFieldType — unknown fallback", () => {
+  it("returns unknown for a plain input with no hints", () => {
     const input = document.createElement("input");
-    expect(detectFieldType(input)).toBe("text");
+    expect(detectFieldType(input)).toBe("unknown");
   });
 
-  it("returns text for textarea-like signal with no specific type", () => {
+  it("returns unknown for textarea-like signal with no specific type", () => {
     const input = document.createElement("input");
     input.name = "message";
-    expect(detectFieldType(input)).toBe("text");
+    expect(detectFieldType(input)).toBe("unknown");
   });
 });
 
@@ -391,6 +391,170 @@ describe("detectFieldType — label associations", () => {
       return container.querySelector("input")!;
     });
     expect(detectFieldType(input)).toBe("address");
+    cleanup();
+  });
+
+  // STRATEGY 6b: label nested inside sibling div (the user's actual HTML structure)
+  // This is the exact structure from the user's weird-form.html:
+  // <div>
+  //   <div><label>Name</label></div>
+  //   <input />
+  // </div>
+  it("detects firstName via nested label in sibling div (weird-form.html structure)", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <div class="grid gap-1">
+          <div class="flex items-center gap-2">
+            <label>Name</label>
+          </div>
+          <input class="..." type="text" />
+        </div>
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(detectFieldType(input)).toBe("firstName");
+    cleanup();
+  });
+
+  it("detects lastName via nested label in sibling div", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <div class="grid gap-1">
+          <div class="flex items-center gap-2">
+            <label>Lastname</label>
+          </div>
+          <input class="..." type="text" />
+        </div>
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(detectFieldType(input)).toBe("lastName");
+    cleanup();
+  });
+
+  it("detects email via nested label in sibling div", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <div class="grid gap-1">
+          <div class="flex items-center gap-2">
+            <label>Email</label>
+          </div>
+          <input class="..." type="text" />
+        </div>
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(detectFieldType(input)).toBe("email");
+    cleanup();
+  });
+
+  it("detects phone via nested label in sibling div", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <div class="grid gap-1">
+          <div class="flex items-center gap-2">
+            <label>Phone Number</label>
+          </div>
+          <input class="..." type="text" />
+        </div>
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(detectFieldType(input)).toBe("phone");
+    cleanup();
+  });
+
+  // Test for the EXACT structure from weird-form.html - Email field
+  it("detects email via exact weird-form.html structure (div > div > label + sibling input)", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <div class="grid gap-1">
+          <div class="flex items-center gap-2">
+            <label class="font-montserrat font-medium text-[16px]">Email</label>
+          </div>
+          <input class="w-full px-4 rounded-lg border" placeholder="" maxlength="255" type="email" value="" />
+        </div>
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(detectFieldType(input)).toBe("email");
+    cleanup();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NEW: short labels like "Name", "Lastname" (the user's reported issue)
+// ---------------------------------------------------------------------------
+describe("detectFieldType — short labels (user's reported issue)", () => {
+  it("detects firstName via label='Name' (short label)", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <label>Name</label>
+        <input />
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(detectFieldType(input)).toBe("firstName");
+    cleanup();
+  });
+
+  it("detects lastName via label='Lastname' (short label)", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <label>Lastname</label>
+        <input />
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(detectFieldType(input)).toBe("lastName");
+    cleanup();
+  });
+
+  it("detects firstName via label='Nombre' (Spanish short label)", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <label>Nombre</label>
+        <input />
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(detectFieldType(input)).toBe("firstName");
+    cleanup();
+  });
+
+  it("detects lastName via label='Apellido' (Spanish short label)", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <label>Apellido</label>
+        <input />
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(detectFieldType(input)).toBe("lastName");
+    cleanup();
+  });
+
+  it("detects email via label='Email' (short label)", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <label>Email</label>
+        <input />
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(detectFieldType(input)).toBe("email");
+    cleanup();
+  });
+
+  it("detects phone via label='Phone Number' (common label)", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <label>Phone Number</label>
+        <input />
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(detectFieldType(input)).toBe("phone");
     cleanup();
   });
 });

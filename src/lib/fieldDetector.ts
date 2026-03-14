@@ -93,16 +93,27 @@ function getLabelText(input: HTMLInputElement | HTMLSelectElement | HTMLTextArea
   }
 
   // 6. Buscar sibling label (label antes/después del input)
+  // Busca label como hermano directo O dentro del elemento hermano
   const parent = input.parentElement;
   if (parent) {
-    // Label como hermano anterior
+    // Label como hermano anterior directo
     const prevLabel = parent.previousElementSibling;
     if (prevLabel?.tagName === "LABEL") {
       return prevLabel.textContent ?? "";
     }
-    // Label como primer hijo
+    // Label como primer hijo del hermano anterior
+    const prevLabelChild = prevLabel?.querySelector(":scope > label");
+    if (prevLabelChild) return prevLabelChild.textContent ?? "";
+    // Label como cualquier descendant del hermano anterior (estructura: div > div > label)
+    const prevLabelNested = prevLabel?.querySelector("label");
+    if (prevLabelNested) return prevLabelNested.textContent ?? "";
+
+    // Label como primer hijo directo del parent
     const firstLabel = parent.querySelector(":scope > label");
     if (firstLabel) return firstLabel.textContent ?? "";
+    // Label como cualquier descendant del parent
+    const nestedLabel = parent.querySelector("label");
+    if (nestedLabel) return nestedLabel.textContent ?? "";
   }
 
   return "";
@@ -146,26 +157,46 @@ function getDataAttributeHint(input: HTMLInputElement): string {
 }
 
 // Patrones RegExp para matching en texto libre (labels, placeholders, etc.)
-// NOTA: Se去掉 acentos para mejor matching
+// IMPORTANTE: Usamos \b (word boundaries) para evitar falsos positivos
+// Ejemplo: "Card Holders Full Name" NO debe matchear con "name" porque "name" no es una palabra completa
+// Pero permitimos algunos casos especiales como "fullName" que contiene "lname"
 const FIELD_PATTERNS: Record<FieldType, RegExp> = {
-  email: /email|correo/i,
-  firstName: /first.?name|nom(?:bre)?(?:de)?(?:primer)?|fname|primer(?:nombre)?/i,
-  lastName: /last.?name|apellido|lname|segundo(?:nombre)?|apellidos?/i,
-  name: /^name$|full.?name|nom(?:bre)?(?:completo)?|nombre/i,
-  phone: /phone|tel[eé]?fono?|mobile|cel(?:ular)?|whatsapp/i,
-  address: /address|direcci[oó]n|street|domicilio|calle|\bnum(?:ero)?\b|n[°º]/i,
-  city: /city|ciudad|poblaci[oó]n|municipio/i,
-  state: /state|provincia|estado|regi[oó]n/i,
-  country: /country|pa[ií]s|nacionalidad/i,
-  zipCode: /zip|postal|cp|cep|pos(?:tal)?|c[oó]digo(?:postal)?/i,
-  company: /company|empresa|organization|org(?:anizaci[oó]n)?|negocio/i,
-  username: /user(?:name)?|usuario|login|account/i,
-  password: /pass(?:word)?|contrase[nñ]a|clave|pin/i,
-  date: /date|fecha|dob|birth(?:day)?|nacimiento/i,
-  number: /number|cantidad|amount|count|cant|monto|edad|\bage\b/i,
+  // Casos específicos primero (para que "Name" -> firstName, no "name")
+  // Usamos boundaries para evitar substring matches en texto normal
+  // Pero permitimos "fullName" que es un caso común
+  firstName: /\b(first.?name|firstname|fname)\b|^(nombre)$|^(Nombre)$|^(Name)$|\bnombre\b|\bprimer\b/i,
+  lastName: /\b(last.?name|lastname|lname|fullname)\b|^(apellido)$|^(Apellido)$|^(Lastname)$|^(Last Name)$|\bsurname\b|\bapellidos?\b/i,
+  
+  // Name genérico (después de firstName/lastName para evitar colisiones)
+  // Usamos boundary al inicio pero no al final para capturar "full name" o "Name" al final
+  name: /\bname$|\bfull.?name\b/i,
+  
+  // Resto de campos - todos con word boundaries
+  // Para zipCode permitimos "zipCode" como caso especial (data attributes)
+  email: /\bemail\b|\bcorreo\b/i,
+  phone: /\bphone\b|\btel[eé]?fono?\b|\bmobile\b|\bcel(?:ular)?\b|\bwhatsapp\b/i,
+  address: /\baddress\b|\bdirecci[oó]n\b|\bstreet\b|\bdomicilio\b|\bcalle\b|\bnum(?:ero)?\b|n[°º]/i,
+  city: /\bcity\b|\bciudad\b|\bpoblaci[oó]n\b|\bmunicipio\b/i,
+  state: /\bstate\b|\bprovincia\b|\bestado\b|\bregi[oó]n\b/i,
+  country: /\bcountry\b|\bpa[ií]s\b|\bnacionalidad\b/i,
+  zipCode: /\b(zip|postal|cp|cep|pos(?:tal)?|c[oó]digo(?:postal)?)\b|zipcode\b/i,
+  company: /\bcompany\b|\bempresa\b|\borganization\b|\borg(?:anizaci[oó]n)?\b|\bnegocio\b/i,
+  username: /\busername\b|\busuario\b|\blogin\b|\baccount\b/i,
+  password: /\bpass(?:word)?\b|\bcontrase[nñ]a\b|\bclave\b|\bpin\b/i,
+  date: /\bdate\b|\bfecha\b|\bdob\b|\bbirth(?:day)?\b|\bnacimiento\b/i,
+  number: /\bnumber\b|\bcantidad\b|\bamount\b|\bcount\b|\bcant\b|\bmonto\b|\bedad\b|\bage\b/i,
   text: /.*/,
   unknown: /.*/,
 };
+
+// Orden de verificación: primero específicos, luego genéricos
+// Esto asegura que "Name" → firstName (no name), "Lastname" → lastName (no text)
+const FIELD_TYPE_PRIORITY: FieldType[] = [
+  "firstName", "lastName", // específicos van primero
+  "name", // genérico después
+  "email", "phone", "address", "city", "state", "country", "zipCode", "company", "username", "password", "date", "number",
+  "text", "unknown",
+];
 
 /**
  * Detecta el tipo de campo usando una jerarquía de señales
@@ -180,12 +211,17 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
   const autocompleteType = parseAutocompleteValue(input);
   if (autocompleteType) return autocompleteType;
 
+  // Función helper para verificar si un tipo matchea usando la prioridad correcta
+  const matches = (type: FieldType, text: string): boolean => {
+    if (type === "text" || type === "unknown") return false;
+    return FIELD_PATTERNS[type].test(text);
+  };
+
   // 2. PRIORIDAD ALTA: aria-label (explícito)
   const ariaLabel = input.getAttribute("aria-label");
-  if (ariaLabel && FIELD_PATTERNS.text.test(ariaLabel)) {
-    for (const [type, pattern] of Object.entries(FIELD_PATTERNS)) {
-      if (type === "text" || type === "unknown") continue;
-      if (pattern.test(ariaLabel)) return type as FieldType;
+  if (ariaLabel) {
+    for (const type of FIELD_TYPE_PRIORITY) {
+      if (matches(type, ariaLabel)) return type;
     }
   }
 
@@ -194,18 +230,16 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
   if (labelText) {
     // Limpiar label (quitar " *", ":", etc)
     const cleanLabel = labelText.replace(/[*:\s]+$/, "").trim();
-    for (const [type, pattern] of Object.entries(FIELD_PATTERNS)) {
-      if (type === "text" || type === "unknown") continue;
-      if (pattern.test(cleanLabel)) return type as FieldType;
+    for (const type of FIELD_TYPE_PRIORITY) {
+      if (matches(type, cleanLabel)) return type;
     }
   }
 
   // 4. PRIORIDAD MEDIA: data-* attributes
   const dataHint = getDataAttributeHint(input);
   if (dataHint) {
-    for (const [type, pattern] of Object.entries(FIELD_PATTERNS)) {
-      if (type === "text" || type === "unknown") continue;
-      if (pattern.test(dataHint)) return type as FieldType;
+    for (const type of FIELD_TYPE_PRIORITY) {
+      if (matches(type, dataHint)) return type;
     }
   }
 
@@ -216,12 +250,13 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
     input.placeholder,
   ].join(" ");
 
-  for (const [type, pattern] of Object.entries(FIELD_PATTERNS)) {
-    if (type === "text" || type === "unknown") continue;
-    if (pattern.test(signals)) return type as FieldType;
+  for (const type of FIELD_TYPE_PRIORITY) {
+    if (matches(type, signals)) return type;
   }
 
   // 6. FALLBACK: input.type nativo
+  // IMPORTANTE: retornamos "unknown" (no fill) en lugar de "text" (lorem ipsum)
+  // para evitar filling incorrecto cuando no podemos detectar el tipo
   if (input.type === "email") return "email";
   if (input.type === "tel") return "phone";
   if (input.type === "date") return "date";
@@ -229,5 +264,5 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
   if (input.type === "password") return "password";
   if (input.type === "search") return "text";
 
-  return "text";
+  return "unknown";
 }
