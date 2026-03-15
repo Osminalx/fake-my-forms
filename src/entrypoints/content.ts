@@ -1,5 +1,5 @@
 import { detectFieldType, getLabelText } from "@/lib/fieldDetector";
-import { generateValue, type FakerConfig } from "@/lib/fakerEngine";
+import { generateValue, createLocationContext, type FakerConfig } from "@/lib/fakerEngine";
 import { buildGroups, type SemanticField } from "@/lib/semanticGrouper";
 import { browser } from "wxt/browser";
 
@@ -52,6 +52,7 @@ function fillAllInputs(config: FakerConfig) {
   });
 
   const groups = buildGroups(fields);
+  const locationContext = createLocationContext();
 
   for (const group of groups) {
     if (group.type === "confirm-pair") {
@@ -60,7 +61,7 @@ function fillAllInputs(config: FakerConfig) {
         probability: 100,
         customValues: [],
       };
-      const value = generateValue(group.primary.fieldType, fieldConfig);
+      const value = generateValue(group.primary.fieldType, fieldConfig, locationContext);
       if (value) {
         fillInput(group.primary.element, value);
         fillInput(group.confirm.element, value);
@@ -71,7 +72,7 @@ function fillAllInputs(config: FakerConfig) {
         probability: 100,
         customValues: [],
       };
-      const value = generateValue(group.field.fieldType, fieldConfig);
+      const value = generateValue(group.field.fieldType, fieldConfig, locationContext);
       if (value) fillInput(group.field.element, value);
     }
   }
