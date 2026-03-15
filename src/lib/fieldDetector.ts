@@ -13,6 +13,7 @@ export type FieldType =
   | "username"
   | "password"
   | "date"
+  | "age"
   | "number"
   | "text"
   | "unknown";
@@ -55,7 +56,7 @@ const AUTOCOMPLETE_TOKENS: Record<string, FieldType> = {
  * Finds the text of the label associated with an input
  * Implements the HTML specification for how labels are associated
  */
-function getLabelText(input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): string {
+export function getLabelText(input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): string {
   let labelText = "";
 
   // 1. aria-label (highest priority)
@@ -189,7 +190,8 @@ const FIELD_PATTERNS: Record<FieldType, RegExp> = {
   username: /\busername\b|\busuario\b|\blogin\b|\baccount\b/i,
   password: /\bpass(?:word)?\b|\bcontrase[nñ]a\b|\bclave\b|\bpin\b/i,
   date: /\bdate\b|\bfecha\b|\bdob\b|\bbirth(?:day)?\b|\bnacimiento\b/i,
-  number: /\bnumber\b|\bcantidad\b|\bamount\b|\bcount\b|\bcant\b|\bmonto\b|\bedad\b|\bage\b/i,
+  age: /\bage\b|\bedad\b/i,
+  number: /\bnumber\b|\bcantidad\b|\bamount\b|\bcount\b|\bcant\b|\bmonto\b/i,
   text: /.*/,
   unknown: /.*/,
 };
@@ -199,7 +201,7 @@ const FIELD_PATTERNS: Record<FieldType, RegExp> = {
 const FIELD_TYPE_PRIORITY: FieldType[] = [
   "firstName", "lastName", // specific go first
   "name", // generic after
-  "email", "phone", "address", "city", "state", "country", "zipCode", "company", "username", "password", "date", "number",
+  "email", "phone", "address", "city", "state", "country", "zipCode", "company", "username", "password", "date", "age", "number",
   "text", "unknown",
 ];
 

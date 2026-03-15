@@ -1,5 +1,6 @@
-import { detectFieldType } from "@/lib/fieldDetector";
+import { detectFieldType, getLabelText } from "@/lib/fieldDetector";
 import { generateValue, type FakerConfig } from "@/lib/fakerEngine";
+import { buildGroups, type SemanticField } from "@/lib/semanticGrouper";
 import { browser } from "wxt/browser";
 
 // Since the modern javascript frameworks detect changes through events
@@ -30,22 +31,50 @@ function fillAllInputs(config: FakerConfig) {
     'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea',
   );
 
+  const fields: SemanticField[] = [];
+  let autoId = 0;
+
   elements.forEach((el) => {
-    // Verify element is actually an input or textarea before casting
     if (!(el instanceof HTMLInputElement) && !(el instanceof HTMLTextAreaElement)) {
       return;
     }
-
     const input = el as HTMLInputElement | HTMLTextAreaElement;
-    const fieldType = detectFieldType(input);
-    const fieldConfig = config[fieldType] ?? {
-      enabled: true,
-      probability: 100,
-      customValues: [],
-    };
-    const value = generateValue(fieldType, fieldConfig);
-    if (value) fillInput(input, value);
+    const fieldType = input instanceof HTMLInputElement
+      ? detectFieldType(input)
+      : "text" as const;
+    fields.push({
+      id: input.id || `_fmf_${autoId++}`,
+      element: input,
+      fieldType,
+      name: input instanceof HTMLInputElement ? input.name : "",
+      label: getLabelText(input),
+    });
   });
+
+  const groups = buildGroups(fields);
+
+  for (const group of groups) {
+    if (group.type === "confirm-pair") {
+      const fieldConfig = config[group.primary.fieldType] ?? {
+        enabled: true,
+        probability: 100,
+        customValues: [],
+      };
+      const value = generateValue(group.primary.fieldType, fieldConfig);
+      if (value) {
+        fillInput(group.primary.element, value);
+        fillInput(group.confirm.element, value);
+      }
+    } else {
+      const fieldConfig = config[group.field.fieldType] ?? {
+        enabled: true,
+        probability: 100,
+        customValues: [],
+      };
+      const value = generateValue(group.field.fieldType, fieldConfig);
+      if (value) fillInput(group.field.element, value);
+    }
+  }
 }
 
 async function getStoredFakerConfig(): Promise<FakerConfig> {
