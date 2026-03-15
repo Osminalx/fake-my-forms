@@ -17,7 +17,7 @@ export type FieldType =
   | "text"
   | "unknown";
 
-// Mapeo de tokens autocomplete HTML a nuestro FieldType
+// Mapping of HTML autocomplete tokens to our FieldType
 // https://html.spec.whatwg.org/multipage/form-elements.html#autofill-field
 const AUTOCOMPLETE_TOKENS: Record<string, FieldType> = {
   "given-name": "firstName",
@@ -52,24 +52,24 @@ const AUTOCOMPLETE_TOKENS: Record<string, FieldType> = {
 };
 
 /**
- * Busca el texto del label asociado a un input
- * Implementa la especificación HTML de cómo asociar labels
+ * Finds the text of the label associated with an input
+ * Implements the HTML specification for how labels are associated
  */
 function getLabelText(input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): string {
   let labelText = "";
 
-  // 1. aria-label (máxima prioridad)
+  // 1. aria-label (highest priority)
   const ariaLabel = input.getAttribute("aria-label");
   if (ariaLabel) return ariaLabel;
 
-  // 2. aria-labelledby (referencia a otro elemento)
+  // 2. aria-labelledby (reference to another element)
   const ariaLabelledBy = input.getAttribute("aria-labelledby");
   if (ariaLabelledBy) {
     const labelledElement = document.getElementById(ariaLabelledBy);
     if (labelledElement) return labelledElement.textContent ?? "";
   }
 
-  // 3. Label asociado via for=id
+  // 3. Label associated via for=id
   if (input.id) {
     const labelFor = document.querySelector(`label[for="${CSS.escape(input.id)}"]`);
     if (labelFor) {
@@ -78,51 +78,54 @@ function getLabelText(input: HTMLInputElement | HTMLSelectElement | HTMLTextArea
     }
   }
 
-  // 4. Label envolvente (input dentro de label)
+  // 4. Wrapping label (input inside label)
   const parentLabel = input.closest("label");
   if (parentLabel) {
     labelText = parentLabel.textContent ?? "";
     if (labelText) return labelText;
   }
 
-  // 5. aria-describedby (descripciones adicionales)
+  // 5. aria-describedby (additional descriptions)
   const ariaDescribedBy = input.getAttribute("aria-describedby");
   if (ariaDescribedBy) {
     const describedElement = document.getElementById(ariaDescribedBy);
     if (describedElement) return describedElement.textContent ?? "";
   }
 
-  // 6. Buscar sibling label (label antes/después del input)
-  // Busca label como hermano directo O dentro del elemento hermano
+  // 6. Search for sibling label (label before/after the input)
+  // Searches for label as direct sibling OR within the sibling element
+  // IMPORTANT: we limit the search to the immediate scope of the input
   const parent = input.parentElement;
   if (parent) {
-    // Label como hermano anterior directo
+    // If the input is inside a field container (e.g: div.field), search for the label within the same container
+    // Typical structure: div.field > label + input OR div.field > (label, input)
+    
+    // Search for label as direct previous sibling (structure: div > label, input)
     const prevLabel = parent.previousElementSibling;
     if (prevLabel?.tagName === "LABEL") {
       return prevLabel.textContent ?? "";
     }
-    // Label como primer hijo del hermano anterior
-    const prevLabelChild = prevLabel?.querySelector(":scope > label");
-    if (prevLabelChild) return prevLabelChild.textContent ?? "";
-    // Label como cualquier descendant del hermano anterior (estructura: div > div > label)
-    const prevLabelNested = prevLabel?.querySelector("label");
-    if (prevLabelNested) return prevLabelNested.textContent ?? "";
-
-    // Label como primer hijo directo del parent
-    const firstLabel = parent.querySelector(":scope > label");
-    if (firstLabel) return firstLabel.textContent ?? "";
-    // Label como cualquier descendant del parent
-    const nestedLabel = parent.querySelector("label");
-    if (nestedLabel) return nestedLabel.textContent ?? "";
+    
+    // Search for label as first child of the same parent (structure: div > (label, input))
+    // IMPORTANT: only search among the first 2 children to avoid capturing distant labels
+    const children = Array.from(parent.children).slice(0, 2);
+    for (const child of children) {
+      if (child.tagName === "LABEL") {
+        return child.textContent ?? "";
+      }
+      // Also search inside the first child (structure: div > div > label, input)
+      const labelInChild = child.querySelector("label");
+      if (labelInChild) return labelInChild.textContent ?? "";
+    }
   }
 
   return "";
 }
 
 /**
- * Parsea el atributo autocomplete y devuelve el primer token relevante
- * El autocomplete puede tener múltiples tokens: "given-name billing home"
- * Nos interesa el primero que no sea "billing", "shipping", "off"
+ * Parses the autocomplete attribute and returns the first relevant token
+ * The autocomplete can have multiple tokens: "given-name billing home"
+ * We are interested in the first one that is not "billing", "shipping", "off"
  */
 function parseAutocompleteValue(input: HTMLInputElement): FieldType | null {
   const autocomplete = input.getAttribute("autocomplete");
@@ -131,7 +134,7 @@ function parseAutocompleteValue(input: HTMLInputElement): FieldType | null {
   const tokens = autocomplete.toLowerCase().split(/\s+/);
 
   for (const token of tokens) {
-    // Ignorar tokens que no son de tipo de campo
+    // Ignore tokens that are not field types
     if (token === "off" || token === "on" || token === "billing" || token === "shipping") {
       continue;
     }
@@ -144,8 +147,8 @@ function parseAutocompleteValue(input: HTMLInputElement): FieldType | null {
 }
 
 /**
- * Busca atributos data-* que puedan indicar el tipo de campo
- * Común en testing: data-testid, data-cy, data-test, data-field
+ * Searches for data-* attributes that may indicate the field type
+ * Common in testing: data-testid, data-cy, data-test, data-field
  */
 function getDataAttributeHint(input: HTMLInputElement): string {
   const dataAttrs = ["data-testid", "data-cy", "data-test", "data-field", "data-name"];
@@ -156,23 +159,25 @@ function getDataAttributeHint(input: HTMLInputElement): string {
   return "";
 }
 
-// Patrones RegExp para matching en texto libre (labels, placeholders, etc.)
-// IMPORTANTE: Usamos \b (word boundaries) para evitar falsos positivos
-// Ejemplo: "Card Holders Full Name" NO debe matchear con "name" porque "name" no es una palabra completa
-// Pero permitimos algunos casos especiales como "fullName" que contiene "lname"
+// RegExp patterns for matching in free text (labels, placeholders, etc.)
+// IMPORTANT: We use \b (word boundaries) to avoid false positives
+// Example: "Card Holders Full Name" should NOT match with "name" because "name" is not a complete word
+// But we allow some special cases like "fullName" that contains "lname"
 const FIELD_PATTERNS: Record<FieldType, RegExp> = {
-  // Casos específicos primero (para que "Name" -> firstName, no "name")
-  // Usamos boundaries para evitar substring matches en texto normal
-  // Pero permitimos "fullName" que es un caso común
+  // Specific cases first (so that "Name" -> firstName, not "name")
+  // We use boundaries to avoid substring matches in normal text
+  // But we allow "fullName" which is a common case
   firstName: /\b(first.?name|firstname|fname)\b|^(nombre)$|^(Nombre)$|^(Name)$|\bnombre\b|\bprimer\b/i,
   lastName: /\b(last.?name|lastname|lname|fullname)\b|^(apellido)$|^(Apellido)$|^(Lastname)$|^(Last Name)$|\bsurname\b|\bapellidos?\b/i,
   
-  // Name genérico (después de firstName/lastName para evitar colisiones)
-  // Usamos boundary al inicio pero no al final para capturar "full name" o "Name" al final
-  name: /\bname$|\bfull.?name\b/i,
+  // Generic name (after firstName/lastName to avoid collisions)
+  // \bname$ matches "Name" at the end (e.g: "Card Holder's Full Name")
+  // \bname\b matches any "name" as a complete word
+  // \bfull\s*name\b matches "full name" or "fullname"
+  name: /\bname$|\bname\b|\bfull\s*name\b/i,
   
-  // Resto de campos - todos con word boundaries
-  // Para zipCode permitimos "zipCode" como caso especial (data attributes)
+  // Rest of fields - all with word boundaries
+  // For zipCode we allow "zipCode" as a special case (data attributes)
   email: /\bemail\b|\bcorreo\b/i,
   phone: /\bphone\b|\btel[eé]?fono?\b|\bmobile\b|\bcel(?:ular)?\b|\bwhatsapp\b/i,
   address: /\baddress\b|\bdirecci[oó]n\b|\bstreet\b|\bdomicilio\b|\bcalle\b|\bnum(?:ero)?\b|n[°º]/i,
@@ -189,35 +194,35 @@ const FIELD_PATTERNS: Record<FieldType, RegExp> = {
   unknown: /.*/,
 };
 
-// Orden de verificación: primero específicos, luego genéricos
-// Esto asegura que "Name" → firstName (no name), "Lastname" → lastName (no text)
+// Verification order: first specific, then generic
+// This ensures that "Name" → firstName (not name), "Lastname" → lastName (not text)
 const FIELD_TYPE_PRIORITY: FieldType[] = [
-  "firstName", "lastName", // específicos van primero
-  "name", // genérico después
+  "firstName", "lastName", // specific go first
+  "name", // generic after
   "email", "phone", "address", "city", "state", "country", "zipCode", "company", "username", "password", "date", "number",
   "text", "unknown",
 ];
 
 /**
- * Detecta el tipo de campo usando una jerarquía de señales
- * Orden de prioridad (de mayor a menor):
- * 1. autocomplete token (más confiable - estándar HTML)
+ * Detects the field type using a signal hierarchy
+ * Priority order (from highest to lowest):
+ * 1. autocomplete token (most reliable - HTML standard)
  * 2. label/aria-label/aria-labelledby
  * 3. name, id, placeholder
  * 4. input.type (fallback)
  */
 export function detectFieldType(input: HTMLInputElement): FieldType {
-  // 1. PRIORIDAD ALTA: Autocomplete token
+  // 1. HIGH PRIORITY: Autocomplete token
   const autocompleteType = parseAutocompleteValue(input);
   if (autocompleteType) return autocompleteType;
 
-  // Función helper para verificar si un tipo matchea usando la prioridad correcta
+  // Helper function to check if a type matches using the correct priority
   const matches = (type: FieldType, text: string): boolean => {
     if (type === "text" || type === "unknown") return false;
     return FIELD_PATTERNS[type].test(text);
   };
 
-  // 2. PRIORIDAD ALTA: aria-label (explícito)
+  // 2. HIGH PRIORITY: aria-label (explicit)
   const ariaLabel = input.getAttribute("aria-label");
   if (ariaLabel) {
     for (const type of FIELD_TYPE_PRIORITY) {
@@ -225,17 +230,17 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
     }
   }
 
-  // 3. PRIORIDAD MEDIA: Label asociado
+  // 3. MEDIUM PRIORITY: Associated label
   const labelText = getLabelText(input);
   if (labelText) {
-    // Limpiar label (quitar " *", ":", etc)
+    // Clean label (remove " *", ":", etc)
     const cleanLabel = labelText.replace(/[*:\s]+$/, "").trim();
     for (const type of FIELD_TYPE_PRIORITY) {
       if (matches(type, cleanLabel)) return type;
     }
   }
 
-  // 4. PRIORIDAD MEDIA: data-* attributes
+  // 4. MEDIUM PRIORITY: data-* attributes
   const dataHint = getDataAttributeHint(input);
   if (dataHint) {
     for (const type of FIELD_TYPE_PRIORITY) {
@@ -243,7 +248,7 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
     }
   }
 
-  // 5. PRIORIDAD BAJA: name, id, placeholder
+  // 5. LOW PRIORITY: name, id, placeholder
   const signals = [
     input.name,
     input.id,
@@ -254,9 +259,9 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
     if (matches(type, signals)) return type;
   }
 
-  // 6. FALLBACK: input.type nativo
-  // IMPORTANTE: retornamos "unknown" (no fill) en lugar de "text" (lorem ipsum)
-  // para evitar filling incorrecto cuando no podemos detectar el tipo
+  // 6. FALLBACK: native input.type
+  // IMPORTANT: we return "unknown" (no fill) instead of "text" (lorem ipsum)
+  // to avoid incorrect filling when we cannot detect the type
   if (input.type === "email") return "email";
   if (input.type === "tel") return "phone";
   if (input.type === "date") return "date";
