@@ -1,5 +1,8 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { FIELDS } from "../../lib/fields";
+  import { browser } from "wxt/browser";
+  import { type FakerConfig } from "@/lib/fakerEngine";
   import Header from "./components/header.svelte";
   import Stats from "./components/stats.svelte";
   import Locale from "./components/locale.svelte";
@@ -16,7 +19,7 @@
   );
   let activeTab = $state<TabId>("config");
   let locale = $state("es");
-  let inputCount = $state(7);
+  let inputCount = $state(0);
 
   function onAddValue(type: string, value: string) {
     if (!value.trim()) return;
@@ -39,8 +42,44 @@
     activeTab = tab;
   }
 
-  function onFill() {
-    // Stub: later connect to content script / fakerEngine
+  onMount(async () => {
+    try {
+      const [tab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+      if (!tab?.id) return;
+
+      const response = await browser.tabs.sendMessage(tab.id, {
+        type: "GET_INPUT_STATS",
+      });
+
+      if (response && typeof response.count === "number") {
+        inputCount = response.count;
+      }
+    } catch (error) {
+      console.warn("[fake-my-forms] Failed to get input stats:", error);
+    }
+  });
+
+  async function onFill() {
+    const config: FakerConfig = Object.fromEntries(
+      FIELDS.map((f) => [
+        f.type,
+        {
+          enabled: true,
+          probability: 100,
+          customValues: customValues[f.type] ?? [],
+        },
+      ]),
+    );
+    const [tab] = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (tab?.id != null) {
+      await browser.tabs.sendMessage(tab.id, { type: "FILL_FORM", config });
+    }
   }
 </script>
 
