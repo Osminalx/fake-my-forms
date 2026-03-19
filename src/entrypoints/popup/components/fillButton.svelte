@@ -4,6 +4,7 @@
   let filling = $state(false);
 
   function handleClick() {
+    console.log('FillButton clicked');
     onFill();
     filling = true;
     setTimeout(() => {

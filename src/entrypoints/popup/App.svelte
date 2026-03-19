@@ -62,25 +62,28 @@
     }
   });
 
-  async function onFill() {
-    const config: FakerConfig = Object.fromEntries(
-      FIELDS.map((f) => [
-        f.type,
-        {
-          enabled: true,
-          probability: 100,
-          customValues: customValues[f.type] ?? [],
-        },
-      ]),
-    );
-    const [tab] = await browser.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (tab?.id != null) {
-      await browser.tabs.sendMessage(tab.id, { type: "FILL_FORM", config });
-    }
-  }
+   async function onFill() {
+     // Create a plain config object to avoid sending proxies which cause cloning errors
+     const config: FakerConfig = Object.fromEntries(
+       FIELDS.map((f) => [
+         f.type,
+         {
+           enabled: true,
+           probability: 100,
+           // Ensure customValues is a plain array, not a proxy
+           customValues: Array.isArray(customValues[f.type]) ? [...customValues[f.type]] : [],
+         },
+       ]),
+     );
+     console.log("config: ", config);
+     const [tab] = await browser.tabs.query({
+       active: true,
+       currentWindow: true,
+     });
+     if (tab?.id != null) {
+       await browser.tabs.sendMessage(tab.id, { type: "FILL_FORM", config });
+     }
+   }
 </script>
 
 <div class="popup">
