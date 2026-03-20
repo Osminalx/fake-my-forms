@@ -81,7 +81,7 @@
        currentWindow: true,
      });
      if (tab?.id != null) {
-       await browser.tabs.sendMessage(tab.id, { type: "FILL_FORM", config });
+        await browser.tabs.sendMessage(tab.id, { type: "FILL_FORM", config, locale });
      }
    }
 </script>

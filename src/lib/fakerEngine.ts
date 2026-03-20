@@ -9,7 +9,7 @@ export type FieldConfig = {
 
 export type FakerConfig = Partial<Record<FieldType, FieldConfig>>;
 
-const LOCALE_COUNTRY_MAP: Record<string, string> = {
+export const LOCALE_COUNTRY_MAP: Record<string, string> = {
   en_US: "United States",
   en_AU: "Australia",
   en_CA: "Canada",
@@ -45,8 +45,11 @@ export type LocationContext = {
   localeFaker: typeof faker;
 };
 
-export function createLocationContext(): LocationContext {
-  const locale = faker.helpers.arrayElement(LOCALE_KEYS);
+export function createLocationContext(pickedLocale?: string): LocationContext {
+  const locale =
+    pickedLocale && pickedLocale in LOCALE_COUNTRY_MAP
+      ? pickedLocale
+      : faker.helpers.arrayElement(LOCALE_KEYS);
   return {
     country: LOCALE_COUNTRY_MAP[locale],
     localeFaker: (allFakers as Record<string, typeof faker>)[locale],

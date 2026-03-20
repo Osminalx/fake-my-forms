@@ -62,7 +62,7 @@ function countFillableInputs(): number {
   return elements.length;
 }
 
-function fillAllInputs(config: FakerConfig) {
+function fillAllInputs(config: FakerConfig, locale?: string) {
   const elements = document.querySelectorAll(
     'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea',
   );
@@ -92,7 +92,7 @@ function fillAllInputs(config: FakerConfig) {
   });
 
   const groups = buildGroups(fields);
-  const locationContext = createLocationContext();
+  const locationContext = createLocationContext(locale);
 
   for (const group of groups) {
     if (group.type === "confirm-pair") {
@@ -214,7 +214,7 @@ export default defineContentScript({
     // Listen popup messages
     browser.runtime.onMessage.addListener((message) => {
       if (message.type === "FILL_FORM") {
-        fillAllInputs(message.config);
+        fillAllInputs(message.config, message.locale);
       }
     });
     // Count forms' inputs
