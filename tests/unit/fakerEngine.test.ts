@@ -8,8 +8,8 @@ const zeroProbabilityConfig = { enabled: true, probability: 0, customValues: [] 
 
 const ALL_FIELD_TYPES: FieldType[] = [
   "email", "firstName", "lastName", "name", "phone",
-  "address", "city", "zipCode", "company", "username",
-  "password", "date", "number", "text", "unknown",
+  "address", "city", "state", "zipCode", "country", "company",
+  "username", "password", "date", "age", "number", "text", "unknown",
 ];
 
 describe("generateValue — basic generation", () => {

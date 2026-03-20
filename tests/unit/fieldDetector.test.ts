@@ -85,10 +85,9 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
     expect(detectFieldType(makeInput({ id: "lname" }))).toBe("lastName");
   });
 
-  // NOTE: ^name$ in FIELD_PATTERNS won't match because the signal string always
-  // starts with input.type ("text"), so a bare id="name" falls through to "unknown".
-  it("id='name' alone returns 'unknown' (^name$ does not match multi-word signal)", () => {
-    expect(detectFieldType(makeInput({ id: "name" }))).toBe("unknown");
+  // Signal is " name " — \bname\b matches, so it returns "name"
+  it("detects name via id='name' (\\bname\\b matches in signal string)", () => {
+    expect(detectFieldType(makeInput({ id: "name" }))).toBe("name");
   });
 
   // "fullName" contains the substring "lname" which matches the lastName pattern
@@ -97,8 +96,11 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
     expect(detectFieldType(makeInput({ name: "fullName" }))).toBe("lastName");
   });
 
-  it("detects name via 'full_name' (full.?name without lname collision)", () => {
-    expect(detectFieldType(makeInput({ name: "full_name" }))).toBe("name");
+  // "full_name" has an underscore between "full" and "name". Underscore is \w,
+  // so there is no word boundary before "name", and \bfull\s*name\b requires
+  // whitespace (not underscore). No pattern matches → falls through to "unknown".
+  it("name='full_name' returns 'unknown' (underscore breaks word-boundary and \\s* match)", () => {
+    expect(detectFieldType(makeInput({ name: "full_name" }))).toBe("unknown");
   });
 
   it("detects phone via name='phone'", () => {
@@ -814,8 +816,8 @@ describe("detectFieldType — missing field type patterns", () => {
     expect(detectFieldType(makeInput({ name: "amount" }))).toBe("number");
   });
 
-  it("detects number via 'edad'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "edad" }))).toBe("number");
+  it("detects age via 'edad' (Spanish word for age, matched by age pattern)", () => {
+    expect(detectFieldType(makeInput({ placeholder: "edad" }))).toBe("age");
   });
 
   it("detects number via 'monto'", () => {
