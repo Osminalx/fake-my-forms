@@ -128,7 +128,7 @@ export function getLabelText(input: HTMLInputElement | HTMLSelectElement | HTMLT
  * The autocomplete can have multiple tokens: "given-name billing home"
  * We are interested in the first one that is not "billing", "shipping", "off"
  */
-function parseAutocompleteValue(input: HTMLInputElement): FieldType | null {
+function parseAutocompleteValue(input: HTMLInputElement | HTMLSelectElement): FieldType | null {
   const autocomplete = input.getAttribute("autocomplete");
   if (!autocomplete) return null;
 
@@ -151,7 +151,7 @@ function parseAutocompleteValue(input: HTMLInputElement): FieldType | null {
  * Searches for data-* attributes that may indicate the field type
  * Common in testing: data-testid, data-cy, data-test, data-field
  */
-function getDataAttributeHint(input: HTMLInputElement): string {
+function getDataAttributeHint(input: HTMLInputElement | HTMLSelectElement): string {
   const dataAttrs = ["data-testid", "data-cy", "data-test", "data-field", "data-name"];
   for (const attr of dataAttrs) {
     const value = input.getAttribute(attr);
@@ -213,7 +213,7 @@ const FIELD_TYPE_PRIORITY: FieldType[] = [
  * 3. name, id, placeholder
  * 4. input.type (fallback)
  */
-export function detectFieldType(input: HTMLInputElement): FieldType {
+export function detectFieldType(input: HTMLInputElement | HTMLSelectElement): FieldType {
   // 1. HIGH PRIORITY: Autocomplete token
   const autocompleteType = parseAutocompleteValue(input);
   if (autocompleteType) return autocompleteType;
@@ -254,22 +254,22 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
   const signals = [
     input.name,
     input.id,
-    input.placeholder,
+    input instanceof HTMLInputElement ? input.placeholder : "",
   ].join(" ");
 
   for (const type of FIELD_TYPE_PRIORITY) {
     if (matches(type, signals)) return type;
   }
 
-  // 6. FALLBACK: native input.type
-  // IMPORTANT: we return "unknown" (no fill) instead of "text" (lorem ipsum)
-  // to avoid incorrect filling when we cannot detect the type
-  if (input.type === "email") return "email";
-  if (input.type === "tel") return "phone";
-  if (input.type === "date") return "date";
-  if (input.type === "number") return "number";
-  if (input.type === "password") return "password";
-  if (input.type === "search") return "text";
+  // 6. FALLBACK: native input.type (not applicable for select)
+  if (input instanceof HTMLInputElement) {
+    if (input.type === "email") return "email";
+    if (input.type === "tel") return "phone";
+    if (input.type === "date") return "date";
+    if (input.type === "number") return "number";
+    if (input.type === "password") return "password";
+    if (input.type === "search") return "text";
+  }
 
   return "unknown";
 }
