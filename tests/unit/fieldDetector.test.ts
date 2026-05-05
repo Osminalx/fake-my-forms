@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { detectFieldType, parseAutocompleteValue } from "../../src/lib/fieldDetector";
+import { detectFieldType, parseAutocompleteValue, detectSelectFieldType } from "../../src/lib/fieldDetector";
 
 // ---------------------------------------------------------------------------
 // Basic input factory (no DOM attachment needed)
@@ -937,5 +937,128 @@ describe("detectFieldType — signal priority ordering", () => {
     // type=number but name=email → name wins before type fallback is reached
     const input = makeInput({ type: "number", name: "email" });
     expect(detectFieldType(input)).toBe("email");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NEW: detectSelectFieldType with full signal hierarchy (Tasks 6-7)
+// ---------------------------------------------------------------------------
+describe("detectSelectFieldType — signal hierarchy", () => {
+  // Helper to create select elements
+  function makeSelectInDOM(setup: (container: HTMLDivElement) => HTMLSelectElement): {
+    select: HTMLSelectElement;
+    cleanup: () => void;
+  } {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const select = setup(container);
+    return {
+      select,
+      cleanup: () => document.body.removeChild(container),
+    };
+  }
+
+  // Test 1: autocomplete token (highest priority)
+  it("detects country via autocomplete='country' (highest priority)", () => {
+    const select = makeSelect({ autocomplete: "country" });
+    expect(detectSelectFieldType(select)).toBe("country");
+  });
+
+  it("detects country via autocomplete='country-name'", () => {
+    const select = makeSelect({ autocomplete: "country-name" });
+    expect(detectSelectFieldType(select)).toBe("country");
+  });
+
+  // Test 2: aria-label
+  it("detects country via aria-label='Country'", () => {
+    const select = makeSelect({ ariaLabel: "Country" });
+    expect(detectSelectFieldType(select)).toBe("country");
+  });
+
+  it("detects country via Spanish aria-label='País'", () => {
+    const select = makeSelect({ ariaLabel: "País" });
+    expect(detectSelectFieldType(select)).toBe("country");
+  });
+
+  // Test 3: label[for] association
+  it("detects country via label[for] association", () => {
+    const { select, cleanup } = makeSelectInDOM((container) => {
+      container.innerHTML = `
+        <label for="country-select">Country</label>
+        <select id="country-select">
+          <option value="us">United States</option>
+        </select>
+      `;
+      return container.querySelector("select")!;
+    });
+    expect(detectSelectFieldType(select)).toBe("country");
+    cleanup();
+  });
+
+  it("detects state via label[for] with 'Provincia'", () => {
+    const { select, cleanup } = makeSelectInDOM((container) => {
+      container.innerHTML = `
+        <label for="state-select">Provincia</label>
+        <select id="state-select">
+          <option value="ba">Buenos Aires</option>
+        </select>
+      `;
+      return container.querySelector("select")!;
+    });
+    expect(detectSelectFieldType(select)).toBe("state");
+    cleanup();
+  });
+
+  // Test 4: data-* attributes
+  it("detects country via data-testid='country-select'", () => {
+    const select = document.createElement("select");
+    select.setAttribute("data-testid", "country-select");
+    expect(detectSelectFieldType(select)).toBe("country");
+  });
+
+  it("detects state via data-cy='state-field'", () => {
+    const select = document.createElement("select");
+    select.setAttribute("data-cy", "state-field");
+    expect(detectSelectFieldType(select)).toBe("state");
+  });
+
+  // Test 5: name and id signals
+  it("detects country via name='country'", () => {
+    const select = document.createElement("select");
+    select.name = "country";
+    expect(detectSelectFieldType(select)).toBe("country");
+  });
+
+  it("detects state via id='state'", () => {
+    const select = document.createElement("select");
+    select.id = "state";
+    expect(detectSelectFieldType(select)).toBe("state");
+  });
+
+  // Test: unknown fallback (no signals)
+  it("returns 'unknown' for select with no detectable signals", () => {
+    const select = document.createElement("select");
+    expect(detectSelectFieldType(select)).toBe("unknown");
+  });
+
+  // Test: signal priority - autocomplete beats aria-label
+  it("autocomplete beats aria-label when they conflict", () => {
+    const select = makeSelect({ autocomplete: "country", ariaLabel: "State" });
+    expect(detectSelectFieldType(select)).toBe("country");
+  });
+
+  // Test: aria-label beats label[for]
+  it("aria-label beats label[for] when they conflict", () => {
+    const { select, cleanup } = makeSelectInDOM((container) => {
+      container.innerHTML = `
+        <label for="prio-select">State</label>
+        <select id="prio-select" aria-label="Country">
+          <option value="us">United States</option>
+        </select>
+      `;
+      return container.querySelector("select")!;
+    });
+    expect(detectSelectFieldType(select)).toBe("country");
+    cleanup();
   });
 });

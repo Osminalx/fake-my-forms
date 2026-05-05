@@ -273,3 +273,77 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
 
   return "unknown";
 }
+
+/**
+ * Detects the field type for a select element using a signal hierarchy
+ * Priority order (from highest to lowest):
+ * 1. autocomplete token (most reliable - HTML standard)
+ * 2. aria-label / aria-labelledby
+ * 3. label association (label[for], wrapping label, sibling label)
+ * 4. data-* attributes
+ * 5. name, id
+ * 
+ * Note: No input.type fallback since select elements don't have type attribute
+ */
+export function detectSelectFieldType(select: HTMLSelectElement): FieldType {
+  // 1. HIGH PRIORITY: Autocomplete token
+  const autocompleteType = parseAutocompleteValue(select);
+  if (autocompleteType) return autocompleteType;
+
+  // Helper function to check if a type matches using the correct priority
+  const matches = (type: FieldType, text: string): boolean => {
+    if (type === "text" || type === "unknown") return false;
+    return FIELD_PATTERNS[type].test(text);
+  };
+
+  // 2. HIGH PRIORITY: aria-label (explicit)
+  const ariaLabel = select.getAttribute("aria-label");
+  if (ariaLabel) {
+    for (const type of FIELD_TYPE_PRIORITY) {
+      if (matches(type, ariaLabel)) return type;
+    }
+  }
+
+  // 3. MEDIUM PRIORITY: Associated label
+  const labelText = getLabelText(select);
+  if (labelText) {
+    // Clean label (remove " *", ":", etc)
+    const cleanLabel = labelText.replace(/[*:\s]+$/, "").trim();
+    for (const type of FIELD_TYPE_PRIORITY) {
+      if (matches(type, cleanLabel)) return type;
+    }
+  }
+
+  // 4. MEDIUM PRIORITY: data-* attributes
+  const dataHint = getDataAttributeHintForSelect(select);
+  if (dataHint) {
+    for (const type of FIELD_TYPE_PRIORITY) {
+      if (matches(type, dataHint)) return type;
+    }
+  }
+
+  // 5. LOW PRIORITY: name, id
+  const signals = [
+    select.name,
+    select.id,
+  ].join(" ");
+
+  for (const type of FIELD_TYPE_PRIORITY) {
+    if (matches(type, signals)) return type;
+  }
+
+  return "unknown";
+}
+
+/**
+ * Searches for data-* attributes that may indicate the field type
+ * Common in testing: data-testid, data-cy, data-test, data-field
+ */
+function getDataAttributeHintForSelect(select: HTMLSelectElement): string {
+  const dataAttrs = ["data-testid", "data-cy", "data-test", "data-field", "data-name"];
+  for (const attr of dataAttrs) {
+    const value = select.getAttribute(attr);
+    if (value) return value;
+  }
+  return "";
+}
