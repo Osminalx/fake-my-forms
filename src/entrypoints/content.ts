@@ -69,12 +69,18 @@ export function fillSelect(
   return false;
 }
 
-function countFillableInputs(): number {
+export function countFillableInputs(): number {
   const elements = document.querySelectorAll(
-    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea',
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, select',
   );
 
-  return elements.length;
+  // Filter out disabled and multiple selects (REQ-1)
+  return Array.from(elements).filter((el) => {
+    if (el instanceof HTMLSelectElement) {
+      return !el.disabled && !el.multiple;
+    }
+    return true;
+  }).length;
 }
 
 function fillAllInputs(config: FakerConfig, locale?: string) {

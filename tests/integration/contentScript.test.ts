@@ -36,7 +36,9 @@ mock.module("wxt/browser", () => ({
 };
 
 // Dynamic import AFTER mocks are in place
-await import("../../src/entrypoints/content.ts");
+const contentModule = await import("../../src/entrypoints/content.ts") as {
+  countFillableInputs: typeof import("../../src/entrypoints/content.ts").countFillableInputs;
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -272,6 +274,67 @@ describe("fillAllInputs — select elements (REQ-7)", () => {
 
     expect(emailInput.value).toBe("test@test.com");
     expect(select.value).toBe("ca");
+    cleanup(form);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// countFillableInputs — includes select elements (REQ-8)
+// ---------------------------------------------------------------------------
+describe("countFillableInputs — select elements (REQ-8)", () => {
+  it("counts a single select element (REQ-8)", () => {
+    const form = makeForm(`
+      <select name="country">
+        <option value="us">United States</option>
+      </select>
+    `);
+
+    // countFillableInputs should include select elements
+    const count = contentModule.countFillableInputs();
+    expect(count).toBe(1);
+
+    cleanup(form);
+  });
+
+  it("counts both inputs and selects together (REQ-8)", () => {
+    const form = makeForm(`
+      <input name="email" type="email" />
+      <select name="country">
+        <option value="us">United States</option>
+      </select>
+    `);
+
+    const count = contentModule.countFillableInputs();
+    expect(count).toBe(2);
+
+    cleanup(form);
+  });
+
+  it("does NOT count disabled select elements (REQ-1)", () => {
+    const form = makeForm(`
+      <select name="country" disabled>
+        <option value="us">United States</option>
+      </select>
+      <input name="email" type="email" />
+    `);
+
+    const count = contentModule.countFillableInputs();
+    expect(count).toBe(1); // only the input, not the disabled select
+
+    cleanup(form);
+  });
+
+  it("does NOT count multiple select elements (REQ-1)", () => {
+    const form = makeForm(`
+      <select name="country" multiple>
+        <option value="us">United States</option>
+      </select>
+      <input name="email" type="email" />
+    `);
+
+    const count = contentModule.countFillableInputs();
+    expect(count).toBe(1); // only the input, not the multiple select
+
     cleanup(form);
   });
 });
