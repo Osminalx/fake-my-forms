@@ -167,6 +167,116 @@ describe("fillAllInputs — skipped input types", () => {
 });
 
 // ---------------------------------------------------------------------------
+// fillAllInputs — select element processing (REQ-7)
+// ---------------------------------------------------------------------------
+describe("fillAllInputs — select elements (REQ-7)", () => {
+  it("fills a select element with matching option by text", () => {
+    const form = makeForm(`
+      <select name="country">
+        <option value="us">United States</option>
+        <option value="ca">Canada</option>
+      </select>
+    `);
+    const select = form.querySelector<HTMLSelectElement>("select")!;
+
+    // country fieldType should generate a country value that matches "United States" or "Canada"
+    const config = {
+      country: { enabled: true, probability: 100, customValues: ["United States"] },
+    };
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config });
+    }
+
+    expect(select.value).toBe("us");
+    cleanup(form);
+  });
+
+  it("fills a select element with matching option by value", () => {
+    const form = makeForm(`
+      <select name="country">
+        <option value="us">United States</option>
+        <option value="ca">Canada</option>
+      </select>
+    `);
+    const select = form.querySelector<HTMLSelectElement>("select")!;
+
+    const config = {
+      country: { enabled: true, probability: 100, customValues: ["ca"] },
+    };
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config });
+    }
+
+    expect(select.value).toBe("ca");
+    cleanup(form);
+  });
+
+  it("skips disabled select elements", () => {
+    const form = makeForm(`
+      <select name="country" disabled>
+        <option value="us">United States</option>
+      </select>
+    `);
+    const select = form.querySelector<HTMLSelectElement>("select")!;
+    const prevValue = select.value;
+
+    const config = {
+      country: { enabled: true, probability: 100, customValues: ["United States"] },
+    };
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config });
+    }
+
+    expect(select.value).toBe(prevValue); // unchanged
+    cleanup(form);
+  });
+
+  it("skips select elements with [multiple]", () => {
+    const form = makeForm(`
+      <select name="country" multiple>
+        <option value="us">United States</option>
+      </select>
+    `);
+    const select = form.querySelector<HTMLSelectElement>("select")!;
+    const prevValue = select.value;
+
+    const config = {
+      country: { enabled: true, probability: 100, customValues: ["United States"] },
+    };
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config });
+    }
+
+    expect(select.value).toBe(prevValue); // unchanged
+    cleanup(form);
+  });
+
+  it("processes both inputs and selects in one pass", () => {
+    const form = makeForm(`
+      <input name="email" type="email" />
+      <select name="country">
+        <option value="us">United States</option>
+        <option value="ca">Canada</option>
+      </select>
+    `);
+    const emailInput = form.querySelector<HTMLInputElement>('[name="email"]')!;
+    const select = form.querySelector<HTMLSelectElement>("select")!;
+
+    const config = {
+      email: { enabled: true, probability: 100, customValues: ["test@test.com"] },
+      country: { enabled: true, probability: 100, customValues: ["Canada"] },
+    };
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config });
+    }
+
+    expect(emailInput.value).toBe("test@test.com");
+    expect(select.value).toBe("ca");
+    cleanup(form);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Message listener — ignores unknown message types
 // ---------------------------------------------------------------------------
 describe("message listener — type filtering", () => {

@@ -1,4 +1,4 @@
-import { detectFieldType, getLabelText } from "@/lib/fieldDetector";
+import { detectFieldType, detectSelectFieldType, getLabelText } from "@/lib/fieldDetector";
 import {
   generateValue,
   createLocationContext,
@@ -79,13 +79,26 @@ function countFillableInputs(): number {
 
 function fillAllInputs(config: FakerConfig, locale?: string) {
   const elements = document.querySelectorAll(
-    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea',
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, select',
   );
 
   const fields: SemanticField[] = [];
   let autoId = 0;
 
   elements.forEach((el) => {
+    // Handle select elements (REQ-7)
+    if (el instanceof HTMLSelectElement) {
+      const fieldType = detectSelectFieldType(el);
+      fields.push({
+        id: el.id || `_fmf_${autoId++}`,
+        element: el,
+        fieldType,
+        name: el.name,
+        label: getLabelText(el),
+      });
+      return;
+    }
+
     if (
       !(el instanceof HTMLInputElement) &&
       !(el instanceof HTMLTextAreaElement)
@@ -122,8 +135,14 @@ function fillAllInputs(config: FakerConfig, locale?: string) {
         locationContext,
       );
       if (value) {
-        fillInput(group.primary.element, value);
-        fillInput(group.confirm.element, value);
+        // Use fillSelect for select elements, fillInput for others
+        if (group.primary.element instanceof HTMLSelectElement) {
+          fillSelect(group.primary.element, value);
+          fillSelect(group.confirm.element as HTMLSelectElement, value);
+        } else {
+          fillInput(group.primary.element, value);
+          fillInput(group.confirm.element, value);
+        }
       }
     } else {
       const fieldConfig = config[group.field.fieldType] ?? {
@@ -136,7 +155,14 @@ function fillAllInputs(config: FakerConfig, locale?: string) {
         fieldConfig,
         locationContext,
       );
-      if (value) fillInput(group.field.element, value);
+      if (value) {
+        // Use fillSelect for select elements, fillInput for others
+        if (group.field.element instanceof HTMLSelectElement) {
+          fillSelect(group.field.element, value);
+        } else {
+          fillInput(group.field.element, value);
+        }
+      }
     }
   }
 }
