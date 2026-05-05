@@ -1,5 +1,5 @@
 import { faker, allFakers } from "@faker-js/faker";
-import type { FieldType } from "./fieldDetector";
+import type { FieldType, SelectElementType } from "./fieldDetector";
 
 export type FieldConfig = {
   enabled: boolean;
@@ -95,4 +95,67 @@ export function generateValue(
   };
 
   return generators[fieldType]?.() ?? null;
+}
+
+/**
+ * Validates a faker-generated value against actually available options
+ * in a native select or framework dropdown.
+ * Returns validation result with match info and available options for logging.
+ */
+export function validateSelectValue(
+  element: HTMLSelectElement | Element,
+  value: string
+): { isValid: boolean; matchedOption?: string; availableOptions: string[] } {
+  let availableOptions: string[] = [];
+
+  if (element instanceof HTMLSelectElement) {
+    // Native select: scan options - include both text and value
+    availableOptions = Array.from(element.options).map(o => o.text || o.value);
+  } else {
+    // Framework dropdown: scan child elements for options
+    // Use multiple queries since querySelectorAll doesn't support comma in all environments
+    const options1 = element.querySelectorAll('[role="option"]');
+    const options2 = element.querySelectorAll('li');
+    const options3 = element.querySelectorAll('[data-value]');
+    
+    const allOptions = [...Array.from(options1), ...Array.from(options2), ...Array.from(options3)];
+    const seen = new Set<string>();
+    for (const el of allOptions) {
+      const text = el.textContent || el.getAttribute('data-value') || '';
+      if (text && !seen.has(text)) {
+        seen.add(text);
+        availableOptions.push(text);
+      }
+    }
+  }
+
+  const search = value.toLowerCase().trim();
+
+  // Check if search matches any option (text or value for native selects)
+  let matched: string | undefined = undefined;
+
+  if (element instanceof HTMLSelectElement) {
+    // For native selects, also check option.values
+    for (const option of Array.from(element.options)) {
+      const optionText = (option.text ?? "").toLowerCase();
+      const optionValue = (option.value ?? "").toLowerCase();
+
+      if (optionText.includes(search) || optionValue.includes(search) ||
+          search.includes(optionText) || search.includes(optionValue)) {
+        matched = option.text || option.value;
+        break;
+      }
+    }
+  } else {
+    // For framework dropdowns, just check the extracted text/values
+    matched = availableOptions.find(opt =>
+      opt.toLowerCase().includes(search) || search.includes(opt.toLowerCase())
+    );
+  }
+
+  return {
+    isValid: !!matched,
+    matchedOption: matched,
+    availableOptions,
+  };
 }

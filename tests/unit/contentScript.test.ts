@@ -14,9 +14,13 @@ mock.module("wxt/browser", () => ({
 };
 
 // Dynamic import AFTER mocks are in place
-const { fillSelect } = (await import(
+const { fillSelect, handleFrameworkDropdown, fillAllInputs } = (await import(
   "../../src/entrypoints/content.ts"
-)) as { fillSelect: typeof import("../../src/entrypoints/content.ts").fillSelect };
+)) as {
+  fillSelect: typeof import("../../src/entrypoints/content.ts").fillSelect;
+  handleFrameworkDropdown: typeof import("../../src/entrypoints/content.ts").handleFrameworkDropdown;
+  fillAllInputs: typeof import("../../src/entrypoints/content.ts").fillAllInputs;
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -167,6 +171,141 @@ describe("fillSelect", () => {
         { value: "us", text: "United States" },
       ]);
       expect(fillSelect(select, "nonexistent")).toBe(false);
+    });
+  });
+
+  // Task 3.2: fillSelect() logging behavior
+  describe("logging behavior (Task 3.2)", () => {
+    it("logs debug when select is disabled", () => {
+      const consoleDebug = mock(() => {});
+      const originalDebug = console.debug;
+      console.debug = consoleDebug;
+
+      const select = makeSelect(
+        [{ value: "us", text: "United States" }],
+        "disabled",
+      );
+      fillSelect(select, "us");
+
+      expect(consoleDebug).toHaveBeenCalled();
+      const firstCall = (consoleDebug as any).mock.calls[0];
+      expect(firstCall[0]).toContain("Skipped disabled select");
+
+      console.debug = originalDebug;
+    });
+
+    it("logs debug when select has multiple", () => {
+      const consoleDebug = mock(() => {});
+      const originalDebug = console.debug;
+      console.debug = consoleDebug;
+
+      const select = makeSelect(
+        [{ value: "us", text: "United States" }],
+        "multiple",
+      );
+      fillSelect(select, "us");
+
+      expect(consoleDebug).toHaveBeenCalled();
+      const firstCall = (consoleDebug as any).mock.calls[0];
+      expect(firstCall[0]).toContain("Skipped multiple select");
+
+      console.debug = originalDebug;
+    });
+
+    it("logs debug when select has zero options", () => {
+      const consoleDebug = mock(() => {});
+      const originalDebug = console.debug;
+      console.debug = consoleDebug;
+
+      const select = makeSelect([]);
+      fillSelect(select, "us");
+
+      expect(consoleDebug).toHaveBeenCalled();
+      const firstCall = (consoleDebug as any).mock.calls[0];
+      expect(firstCall[0]).toContain("Skipped select with zero options");
+
+      console.debug = originalDebug;
+    });
+
+    it("logs warning when no matching option found", () => {
+      const consoleWarn = mock(() => {});
+      const originalWarn = console.warn;
+      console.warn = consoleWarn;
+
+      const select = makeSelect([
+        { value: "us", text: "United States" },
+        { value: "ca", text: "Canada" },
+      ]);
+      fillSelect(select, "nonexistent");
+
+      expect(consoleWarn).toHaveBeenCalled();
+      const firstCall = (consoleWarn as any).mock.calls[0];
+      expect(firstCall[0]).toContain("No matching option for 'nonexistent'");
+
+      console.warn = originalWarn;
+    });
+  });
+
+  // Task 3.5: Tests for fillAllInputs() summary stats
+  describe("fillAllInputs summary stats (Task 3.5)", () => {
+    it("should log summary stats after filling inputs", () => {
+      const consoleDebug = mock(() => {});
+      const originalDebug = console.debug;
+      console.debug = consoleDebug;
+
+      // Create a form with selects
+      document.body.innerHTML = `
+        <form>
+          <select name="country" autocomplete="country">
+            <option value="us">United States</option>
+            <option value="ca">Canada</option>
+          </select>
+          <input type="text" name="name" autocomplete="name" />
+        </form>
+      `;
+
+      fillAllInputs({ country: { enabled: true, probability: 100, customValues: [] } });
+
+      // Should log summary
+      expect(consoleDebug).toHaveBeenCalled();
+      const summaryCall = (consoleDebug as any).mock.calls.find(
+        (call: any) => call[0]?.includes?.("fillAllInputs summary")
+      );
+      expect(summaryCall).toBeDefined();
+
+      console.debug = originalDebug;
+
+      // Clean up
+      document.body.innerHTML = "";
+    });
+
+    it("should count framework dropdowns in stats", () => {
+      const consoleDebug = mock(() => {});
+      const originalDebug = console.debug;
+      console.debug = consoleDebug;
+
+      // Create a form with a framework dropdown
+      document.body.innerHTML = `
+        <form>
+          <div class="vue-select" role="combobox" name="country">
+            <li data-value="us">United States</li>
+            <li data-value="ca">Canada</li>
+          </div>
+        </form>
+      `;
+
+      fillAllInputs({ country: { enabled: true, probability: 100, customValues: [] } });
+
+      // Should log summary with framework dropdown count
+      const summaryCall = (consoleDebug as any).mock.calls.find(
+        (call: any) => call[0]?.includes?.("fillAllInputs summary")
+      );
+      expect(summaryCall).toBeDefined();
+
+      console.debug = originalDebug;
+
+      // Clean up
+      document.body.innerHTML = "";
     });
   });
 });
