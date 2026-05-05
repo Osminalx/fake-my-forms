@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
-import { detectFieldType } from "../../src/lib/fieldDetector";
+import { detectFieldType, parseAutocompleteValue } from "../../src/lib/fieldDetector";
 
 // ---------------------------------------------------------------------------
 // Basic input factory (no DOM attachment needed)
@@ -603,6 +603,39 @@ describe("detectFieldType — data-* attribute hints", () => {
 
   it("detects city via data-cy='city-field'", () => {
     expect(detectFieldType(makeInput({ dataCy: "city-field" }))).toBe("city");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NEW: parseAutocompleteValue with HTMLSelectElement (Task 4)
+// ---------------------------------------------------------------------------
+function makeSelect(attrs: Partial<{
+  name: string;
+  id: string;
+  autocomplete: string;
+  ariaLabel: string;
+}>): HTMLSelectElement {
+  const select = document.createElement("select");
+  if (attrs.name) select.name = attrs.name;
+  if (attrs.id) select.id = attrs.id;
+  if (attrs.autocomplete) select.setAttribute("autocomplete", attrs.autocomplete);
+  if (attrs.ariaLabel) select.setAttribute("aria-label", attrs.ariaLabel);
+  return select;
+}
+
+describe("parseAutocompleteValue — HTMLSelectElement support", () => {
+  it("should accept HTMLSelectElement and return correct FieldType", () => {
+    const select = makeSelect({ autocomplete: "country" });
+    // This should fail before REQ-3 is implemented 
+    // parseAutocompleteValue currently only accepts HTMLInputElement
+    const result = parseAutocompleteValue(select);
+    expect(result).toBe("country");
+  });
+
+  it("should handle 'country-name' token on select element", () => {
+    const select = makeSelect({ autocomplete: "country-name" });
+    const result = parseAutocompleteValue(select);
+    expect(result).toBe("country");
   });
 });
 

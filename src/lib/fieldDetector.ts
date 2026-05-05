@@ -128,7 +128,7 @@ export function getLabelText(input: HTMLInputElement | HTMLSelectElement | HTMLT
  * The autocomplete can have multiple tokens: "given-name billing home"
  * We are interested in the first one that is not "billing", "shipping", "off"
  */
-function parseAutocompleteValue(input: HTMLInputElement): FieldType | null {
+export function parseAutocompleteValue(input: HTMLInputElement | HTMLSelectElement): FieldType | null {
   const autocomplete = input.getAttribute("autocomplete");
   if (!autocomplete) return null;
 
