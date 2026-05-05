@@ -2,7 +2,7 @@ import { type FieldType } from "./fieldDetector";
 
 export type SemanticField = {
   id: string;
-  element: HTMLInputElement | HTMLTextAreaElement;
+  element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
   fieldType: FieldType;
   name: string;
   label: string;
