@@ -30,6 +30,45 @@ function fillInput(
   input.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+export function fillSelect(
+  select: HTMLSelectElement,
+  value: string,
+): boolean {
+  // Guard: disabled, multiple, or zero options
+  if (select.disabled || select.multiple || select.options.length === 0) {
+    return false;
+  }
+
+  const search = value.toLowerCase().trim();
+
+  // Iterate options in DOM order, find first match
+  for (const option of Array.from(select.options)) {
+    const optionText = (option.text ?? "").toLowerCase();
+    const optionValue = (option.value ?? "").toLowerCase();
+
+    // REQ-9: case-insensitive partial substring matching
+    // Match if either text or value contains the search term, or vice versa
+    const matches =
+      optionText.includes(search) ||
+      optionValue.includes(search) ||
+      search.includes(optionText) ||
+      search.includes(optionValue);
+
+    if (matches) {
+      // REQ-4: set select.value — uses patched prototype from tests/setup.ts
+      select.value = option.value;
+
+      // REQ-4: dispatch input and change events (bubbles: true)
+      select.dispatchEvent(new Event("input", { bubbles: true }));
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      return true;
+    }
+  }
+
+  // No match found
+  return false;
+}
+
 function countFillableInputs(): number {
   const elements = document.querySelectorAll(
     'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea',
