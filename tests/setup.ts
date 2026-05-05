@@ -10,6 +10,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import "@testing-library/jest-dom";
 
 GlobalRegistrator.register();
+console.log("setup.ts loaded, patching prototypes...");
 
 // happy-dom's HTMLInputElement / HTMLTextAreaElement value setters use private class
 // fields (#selectionStart) that Bun's JSC engine rejects when those setters are
@@ -20,10 +21,10 @@ const _elementValues = new WeakMap<object, string>();
 
 function patchValueDescriptor(proto: object) {
   Object.defineProperty(proto, "value", {
-    get(this: HTMLInputElement | HTMLTextAreaElement): string {
+    get(this: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): string {
       return _elementValues.get(this) ?? "";
     },
-    set(this: HTMLInputElement | HTMLTextAreaElement, v: string) {
+    set(this: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, v: string) {
       _elementValues.set(this, String(v));
     },
     configurable: true,
@@ -33,3 +34,4 @@ function patchValueDescriptor(proto: object) {
 
 patchValueDescriptor(HTMLInputElement.prototype);
 patchValueDescriptor(HTMLTextAreaElement.prototype);
+patchValueDescriptor(HTMLSelectElement.prototype);
