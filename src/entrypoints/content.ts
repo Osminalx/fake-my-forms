@@ -20,6 +20,9 @@ function fillInput(
   input: HTMLInputElement | HTMLTextAreaElement,
   value: string,
 ) {
+  // File inputs cannot be set programmatically — browsers throw InvalidStateError
+  if (input instanceof HTMLInputElement && input.type === 'file') return;
+
   // Use the correct prototype setter based on element type
   const prototype =
     input instanceof HTMLTextAreaElement
@@ -31,10 +34,13 @@ function fillInput(
     "value",
   )?.set;
 
-  nativeInputSetter?.call(input, value);
-
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
+  try {
+    nativeInputSetter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  } catch (e) {
+    console.debug('[fake-my-forms] fillInput skipped restricted input', input.type, e);
+  }
 }
 
 export function fillSelect(
@@ -115,54 +121,138 @@ export function handleFrameworkDropdown(
   value: string,
   elementType: SelectElementType
 ): boolean {
-  // Validate value against available options first
-  const validation = validateSelectValue(element, value);
-  if (!validation.isValid) {
-    const availableOptions = validation.availableOptions.join(", ");
-    console.warn(
-      `[fake-my-forms] No matching option for '${value}' in framework dropdown [${availableOptions}]`,
-      element
-    );
+  const dbg = (msg: string, ...args: unknown[]) =>
+    console.debug(`[fake-my-forms][fw-dropdown] ${msg}`, ...args);
+
+  dbg('called', {
+    id: element.id,
+    tag: element.tagName,
+    role: element.getAttribute('role'),
+    isConnected: element.isConnected,
+    disabled: element.hasAttribute('disabled'),
+    ariaDisabled: element.getAttribute('aria-disabled'),
+    closestAriaDisabled: element.closest('[aria-disabled="true"]') !== null,
+    value,
+    elementType,
+  });
+
+  // Guard: disabled
+  if (
+    element.hasAttribute('disabled') ||
+    element.getAttribute('aria-disabled') === 'true' ||
+    element.closest('[aria-disabled="true"]') !== null
+  ) {
+    dbg('SKIP disabled', element.id);
     return false;
   }
 
-  // Click to open dropdown
-  element.click();
+  // For input-based framework selects (React Select, Vue Select with inner input):
+  // Typing into the input triggers onInputChange → React Select calls onMenuOpen() internally.
+  // This is more reliable than dispatching mousedown, which requires the component
+  // to already be in a focused state to open the menu.
+  //
+  // For non-input containers: fall back to mousedown on the control.
+  const nativeInputSetter = element instanceof HTMLInputElement
+    ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    : null;
 
-  // Use setTimeout to wait for options to render (framework-specific rendering)
+  try {
+    if (nativeInputSetter) {
+      dbg('open strategy: type value into input', element.id);
+      nativeInputSetter.call(element, value);
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+      const control =
+        element.closest<HTMLElement>('[class*="-control"], [class*="__control"]') ??
+        element;
+      dbg('open strategy: mousedown on control', { id: element.id, controlClass: control.className });
+      control.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
+      control.click();
+    }
+    dbg('open dispatched', element.id);
+  } catch (e) {
+    dbg('open dispatch THREW', e);
+    return false;
+  }
+
+  // Wait for framework to render options (may be portaled anywhere in the document)
   setTimeout(() => {
-    // Query for option elements within the dropdown
-    const options = element.querySelectorAll('[role="option"], li, [data-value]');
+    dbg('setTimeout fired', { id: element.id, isConnected: element.isConnected });
+
+    // Element may have been removed by a re-render between click and timeout
+    if (!element.isConnected) {
+      dbg('element disconnected after click, aborting', element.id);
+      return;
+    }
+
+    // Portal-aware: search the entire document, not just element's subtree
+    const options = document.querySelectorAll('[role="option"]');
+    dbg('options found in document', options.length, Array.from(options).map(o => o.textContent?.trim()));
+
+    const closeDropdown = () => {
+      dbg('closing dropdown via Escape', element.id);
+      try {
+        element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      } catch (e) {
+        dbg('Escape dispatch threw', e);
+      }
+    };
+
+    if (options.length === 0) {
+      console.warn('[fake-my-forms] No options found after opening framework dropdown', element);
+      closeDropdown();
+      return;
+    }
+
     const search = value.toLowerCase().trim();
+    dbg('searching for', search, 'among', options.length, 'options');
 
     for (const option of Array.from(options)) {
-      const text = (option.textContent ?? '').toLowerCase();
-      const dataValue = (option.getAttribute('data-value') || '').toLowerCase();
+      if (option.getAttribute('aria-disabled') === 'true') continue;
 
-      if (text.includes(search) || dataValue.includes(search)) {
-        // Click the matching option
-        (option as HTMLElement).click();
+      const text = (option.textContent ?? '').toLowerCase().trim();
+      const dataValue = (option.getAttribute('data-value') ?? '').toLowerCase();
 
-        // Dispatch change event on the container
-        element.dispatchEvent(new Event('change', { bubbles: true }));
+      // Bidirectional substring match (same logic as fillSelect)
+      if (
+        text.includes(search) ||
+        search.includes(text) ||
+        dataValue.includes(search) ||
+        search.includes(dataValue)
+      ) {
+        dbg('match found, clicking option', text);
+        try {
+          (option as HTMLElement).click();
+          dbg('option.click() succeeded');
+        } catch (e) {
+          dbg('option.click() THREW', e);
+        }
+        try {
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+        } catch (e) {
+          dbg('change dispatch threw', e);
+        }
         return;
       }
     }
 
-    // No match found after opening - close dropdown by clicking container again
-    console.warn(
-      `[fake-my-forms] No matching option found after opening dropdown for '${value}'`,
-      element
-    );
-    element.click(); // Close the dropdown
-  }, 100);
+    console.warn(`[fake-my-forms] No matching option found for '${value}'. Available: [${Array.from(options).map(o => o.textContent?.trim()).join(', ')}]`, element);
+    // Clear the typed search text so the input doesn't show a half-filled value
+    if (nativeInputSetter && element.isConnected) {
+      try {
+        nativeInputSetter.call(element, '');
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+      } catch { /* ignore */ }
+    }
+    closeDropdown();
+  }, 300);
 
-  return true; // Optimistic return
+  return true; // Optimistic — actual fill is async
 }
 
 export function countFillableInputs(): number {
   const elements = document.querySelectorAll(
-    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, select',
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select',
   );
 
   // Filter out disabled and multiple selects (REQ-1)
@@ -178,7 +268,7 @@ export function countFillableInputs(): number {
 export function fillAllInputs(config: FakerConfig, locale?: string) {
   // Extended query: include framework dropdowns (Vue/React custom dropdowns)
   const elements = document.querySelectorAll(
-    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]), textarea, select, [role="combobox"], [role="listbox"], .dropdown, .select-menu',
+    'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select, [role="combobox"], [role="listbox"], .dropdown, .select-menu',
   );
 
   const fields: SemanticField[] = [];
@@ -213,6 +303,15 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
       stats.totalSelects++;
       stats.frameworkDropdowns++;
       const fieldType = detectSelectFieldType(el);
+      console.debug('[fake-my-forms][discovery] framework dropdown', {
+        id: el.id,
+        tag: el.tagName,
+        role: el.getAttribute('role'),
+        elementType,
+        fieldType,
+        disabled: (el as HTMLElement).hasAttribute('disabled'),
+        ariaDisabled: el.getAttribute('aria-disabled'),
+      });
       fields.push({
         id: el.id || `_fmf_${autoId++}`,
         element: el,
@@ -232,6 +331,9 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
     ) {
       return;
     }
+    // File inputs cannot be filled programmatically
+    if (el instanceof HTMLInputElement && el.type === 'file') return;
+
     const input = el as HTMLInputElement | HTMLTextAreaElement;
     const fieldType =
       input instanceof HTMLInputElement
@@ -249,6 +351,12 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
   const groups = buildGroups(fields);
   const locationContext = createLocationContext(locale);
 
+  console.debug('[fake-my-forms][fill] groups to process:', groups.length, groups.map(g =>
+    g.type === 'confirm-pair'
+      ? { type: 'confirm-pair', primary: { id: g.primary.id, fieldType: g.primary.fieldType } }
+      : { type: 'single', id: g.field.id, fieldType: g.field.fieldType, isFrameworkDropdown: (g.field as SemanticField & { isFrameworkDropdown?: boolean }).isFrameworkDropdown }
+  ));
+
   for (const group of groups) {
     if (group.type === "confirm-pair") {
       const fieldConfig = config[group.primary.fieldType] ?? {
@@ -261,12 +369,18 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
         fieldConfig,
         locationContext,
       );
+      console.debug('[fake-my-forms][fill] confirm-pair', group.primary.fieldType, '→ value:', value);
       if (value) {
         // Check if it's a framework dropdown
         const primaryField = group.primary as SemanticField & { isFrameworkDropdown?: boolean; frameworkType?: SelectElementType };
         if (primaryField.isFrameworkDropdown && primaryField.frameworkType) {
-          const filled = handleFrameworkDropdown(primaryField.element as HTMLElement, value, primaryField.frameworkType);
-          if (filled) stats.filled++; else stats.skipped++;
+          if (primaryField.fieldType === 'unknown') {
+            console.debug('[fake-my-forms][fill] SKIP framework dropdown with unknown fieldType', primaryField.id);
+            stats.skipped++;
+          } else {
+            const filled = handleFrameworkDropdown(primaryField.element as HTMLElement, value, primaryField.frameworkType);
+            if (filled) stats.filled++; else stats.skipped++;
+          }
         } else if (group.primary.element instanceof HTMLSelectElement) {
           const filled = fillSelect(group.primary.element, value);
           if (filled) stats.filled++; else stats.skipped++;
@@ -280,8 +394,13 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
         // Fill confirm element
         const confirmField = group.confirm as SemanticField & { isFrameworkDropdown?: boolean; frameworkType?: SelectElementType };
         if (confirmField.isFrameworkDropdown && confirmField.frameworkType) {
-          const filled = handleFrameworkDropdown(confirmField.element as HTMLElement, value, confirmField.frameworkType);
-          if (filled) stats.filled++; else stats.skipped++;
+          if (confirmField.fieldType === 'unknown') {
+            console.debug('[fake-my-forms][fill] SKIP framework dropdown with unknown fieldType', confirmField.id);
+            stats.skipped++;
+          } else {
+            const filled = handleFrameworkDropdown(confirmField.element as HTMLElement, value, confirmField.frameworkType);
+            if (filled) stats.filled++; else stats.skipped++;
+          }
         } else if (group.confirm.element instanceof HTMLSelectElement) {
           const filled = fillSelect(group.confirm.element, value);
           if (filled) stats.filled++; else stats.skipped++;
@@ -303,12 +422,17 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
         fieldConfig,
         locationContext,
       );
+      const field = group.field as SemanticField & { isFrameworkDropdown?: boolean; frameworkType?: SelectElementType };
+      console.debug('[fake-my-forms][fill] single', field.fieldType, field.id, '→ value:', value, '| isFrameworkDropdown:', field.isFrameworkDropdown);
       if (value) {
-        // Check if it's a framework dropdown
-        const field = group.field as SemanticField & { isFrameworkDropdown?: boolean; frameworkType?: SelectElementType };
         if (field.isFrameworkDropdown && field.frameworkType) {
-          const filled = handleFrameworkDropdown(field.element as HTMLElement, value, field.frameworkType);
-          if (filled) stats.filled++; else stats.skipped++;
+          if (field.fieldType === 'unknown') {
+            console.debug('[fake-my-forms][fill] SKIP framework dropdown with unknown fieldType', field.id);
+            stats.skipped++;
+          } else {
+            const filled = handleFrameworkDropdown(field.element as HTMLElement, value, field.frameworkType);
+            if (filled) stats.filled++; else stats.skipped++;
+          }
         } else if (group.field.element instanceof HTMLSelectElement) {
           const filled = fillSelect(group.field.element, value);
           if (filled) stats.filled++; else stats.skipped++;

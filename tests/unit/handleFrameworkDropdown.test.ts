@@ -22,45 +22,50 @@ const { handleFrameworkDropdown } = (await import(
 };
 
 describe("handleFrameworkDropdown", () => {
-  // Task 3.4: Tests for handleFrameworkDropdown() simulation
-
-  it("should return false when validation fails (no matching options)", () => {
+  it("should return true optimistically when element is enabled", () => {
     const div = document.createElement("div");
-    // Empty dropdown - no options
-    div.innerHTML = `<ul></ul>`;
-
-    const result = handleFrameworkDropdown(div, "United States", "vue-dropdown" as SelectElementType);
-    expect(result).toBe(false);
-  });
-
-  it("should return true optimistically when there are options", () => {
-    const div = document.createElement("div");
-    div.innerHTML = `
-      <ul>
-        <li data-value="us">United States</li>
-      </ul>
-    `;
+    div.innerHTML = `<ul><li role="option">United States</li></ul>`;
 
     const result = handleFrameworkDropdown(div, "United States", "vue-dropdown" as SelectElementType);
     expect(result).toBe(true);
   });
 
-  it("should return false when no matching option found", () => {
-    const consoleWarn = mock(() => {});
-    const originalWarn = console.warn;
-    console.warn = consoleWarn;
-
+  it("should return true optimistically even when no options will be found (async failure)", () => {
     const div = document.createElement("div");
-    div.innerHTML = `
-      <li data-value="us">United States</li>
-      <li data-value="ca">Canada</li>
-    `;
+    // No options — async part will warn and press Escape, but sync return is still true
+    div.innerHTML = `<ul></ul>`;
 
-    const result = handleFrameworkDropdown(div, "France", "vue-dropdown" as SelectElementType);
+    const result = handleFrameworkDropdown(div, "United States", "vue-dropdown" as SelectElementType);
+    expect(result).toBe(true);
+  });
 
-    // Should return false because validation fails
+  it("should return false when element has disabled attribute", () => {
+    const input = document.createElement("input");
+    input.setAttribute("disabled", "");
+
+    const result = handleFrameworkDropdown(input, "United States", "react-dropdown" as SelectElementType);
+    expect(result).toBe(false);
+  });
+
+  it("should return false when element has aria-disabled='true'", () => {
+    const div = document.createElement("div");
+    div.setAttribute("aria-disabled", "true");
+    div.innerHTML = `<ul><li role="option">United States</li></ul>`;
+
+    const result = handleFrameworkDropdown(div, "United States", "react-dropdown" as SelectElementType);
+    expect(result).toBe(false);
+  });
+
+  it("should return false when ancestor has aria-disabled='true'", () => {
+    const wrapper = document.createElement("div");
+    wrapper.setAttribute("aria-disabled", "true");
+    const inner = document.createElement("input");
+    wrapper.appendChild(inner);
+    document.body.appendChild(wrapper);
+
+    const result = handleFrameworkDropdown(inner, "Canada", "react-dropdown" as SelectElementType);
     expect(result).toBe(false);
 
-    console.warn = originalWarn;
+    document.body.removeChild(wrapper);
   });
 });
