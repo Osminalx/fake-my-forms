@@ -1,11 +1,13 @@
-import { type FieldType } from "./fieldDetector";
+import { type FieldType, type SelectElementType } from "./fieldDetector";
 
 export type SemanticField = {
   id: string;
-  element: HTMLInputElement | HTMLTextAreaElement;
+  element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | Element;
   fieldType: FieldType;
   name: string;
   label: string;
+  isFrameworkDropdown?: boolean;
+  frameworkType?: SelectElementType;
 };
 
 export type FieldGroup =

@@ -18,6 +18,76 @@ export type FieldType =
   | "text"
   | "unknown";
 
+// Type for detecting framework-specific dropdowns vs native selects
+export type SelectElementType = 'native-select' | 'vue-dropdown' | 'react-dropdown';
+
+/**
+ * Detects if an element is a native select or a framework-specific custom dropdown.
+ * Returns the element type or null if not a select/dropdown.
+ *
+ * Detection priority:
+ * 1. Native <select>
+ * 2. React fiber internal property (definitive)
+ * 3. React Select class/id naming conventions (css-*, react-select-*, __input)
+ * 4. Vue data-v-* scope attributes (definitive)
+ * 5. ARIA role="combobox"/"listbox" with Vue class indicators
+ * 6. Generic class/role fallbacks
+ */
+export function detectSelectElementType(element: Element): SelectElementType | null {
+  // Native HTML select element
+  if (element instanceof HTMLSelectElement) {
+    return 'native-select';
+  }
+
+  // React detection via internal fiber property (most reliable — set by React runtime)
+  const reactFiberKey = Object.keys(element).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactProps$'));
+  if (element.hasAttribute('data-reactroot') || reactFiberKey !== undefined) {
+    return 'react-dropdown';
+  }
+
+  // React Select naming conventions:
+  // IDs: "react-select-N-input", classes: "css-*", "*__input", "*__control"
+  const elementId = element.getAttribute('id') ?? '';
+  const classAttr = element.className ?? '';
+  if (
+    /^react-select-/.test(elementId) ||
+    /react-select/i.test(classAttr) ||
+    // CSS-in-JS class pattern used by react-select (css-<hash>-*)
+    (/css-[a-z0-9]+-/.test(classAttr) && element.getAttribute('role') === 'combobox') ||
+    // react-select generated input classes like "subjects-auto-complete__input"
+    /__input$/.test(classAttr.trim().split(/\s+/).at(-1) ?? '')
+  ) {
+    return 'react-dropdown';
+  }
+
+  // Vue.js detection: data-v-* scope attributes or __vue__ internal property
+  const hasVueDataAttr = Array.from(element.attributes).some(attr => attr.name.startsWith('data-v-'));
+  if (hasVueDataAttr || '__vue__' in element) {
+    return 'vue-dropdown';
+  }
+
+  // ARIA role-based detection — check for Vue indicators on the element or its container
+  const role = element.getAttribute('role');
+  if (role === 'combobox' || role === 'listbox') {
+    const container = element.closest('[class*="v-select"], [class*="vue-select"]') ??
+      element.closest('[data-v-]');
+    if (container) return 'vue-dropdown';
+    // Check class patterns on parent for Vue Select
+    if (/vue-select|v-select/i.test(element.closest('[class]')?.className ?? '')) {
+      return 'vue-dropdown';
+    }
+    // Default: treat any unrecognised combobox/listbox as react-dropdown
+    // since react-select is by far the most common library using these ARIA roles
+    return 'react-dropdown';
+  }
+
+  // Class-based fallbacks
+  if (/vue-select|v-select/i.test(classAttr)) return 'vue-dropdown';
+  if (/dropdown|select-menu/i.test(classAttr)) return 'vue-dropdown';
+
+  return null;
+}
+
 // Mapping of HTML autocomplete tokens to our FieldType
 // https://html.spec.whatwg.org/multipage/form-elements.html#autofill-field
 const AUTOCOMPLETE_TOKENS: Record<string, FieldType> = {
@@ -128,7 +198,7 @@ export function getLabelText(input: HTMLInputElement | HTMLSelectElement | HTMLT
  * The autocomplete can have multiple tokens: "given-name billing home"
  * We are interested in the first one that is not "billing", "shipping", "off"
  */
-function parseAutocompleteValue(input: HTMLInputElement): FieldType | null {
+export function parseAutocompleteValue(input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): FieldType | null {
   const autocomplete = input.getAttribute("autocomplete");
   if (!autocomplete) return null;
 
@@ -151,7 +221,7 @@ function parseAutocompleteValue(input: HTMLInputElement): FieldType | null {
  * Searches for data-* attributes that may indicate the field type
  * Common in testing: data-testid, data-cy, data-test, data-field
  */
-function getDataAttributeHint(input: HTMLInputElement): string {
+function getDataAttributeHint(input: HTMLInputElement | HTMLTextAreaElement): string {
   const dataAttrs = ["data-testid", "data-cy", "data-test", "data-field", "data-name"];
   for (const attr of dataAttrs) {
     const value = input.getAttribute(attr);
@@ -213,7 +283,7 @@ const FIELD_TYPE_PRIORITY: FieldType[] = [
  * 3. name, id, placeholder
  * 4. input.type (fallback)
  */
-export function detectFieldType(input: HTMLInputElement): FieldType {
+export function detectFieldType(input: HTMLInputElement | HTMLTextAreaElement): FieldType {
   // 1. HIGH PRIORITY: Autocomplete token
   const autocompleteType = parseAutocompleteValue(input);
   if (autocompleteType) return autocompleteType;
@@ -261,7 +331,10 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
     if (matches(type, signals)) return type;
   }
 
-  // 6. FALLBACK: native input.type
+  // 6. FALLBACK: element type
+  // Textareas are always text entry fields — fill with lorem if nothing else matches
+  if (input instanceof HTMLTextAreaElement) return "text";
+
   // IMPORTANT: we return "unknown" (no fill) instead of "text" (lorem ipsum)
   // to avoid incorrect filling when we cannot detect the type
   if (input.type === "email") return "email";
@@ -272,4 +345,138 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
   if (input.type === "search") return "text";
 
   return "unknown";
+}
+
+/**
+ * Detects the field type for a select element or framework dropdown using a signal hierarchy
+ * Priority order (from highest to lowest):
+ * 1. autocomplete token (most reliable - HTML standard)
+ * 2. aria-label / aria-labelledby
+ * 3. label association (label[for], wrapping label, sibling label)
+ * 4. data-* attributes
+ * 5. name, id
+ *
+ * Note: No input.type fallback since select elements don't have type attribute.
+ * Extended to accept Element to support framework dropdowns (Vue/React custom dropdowns).
+ */
+export function detectSelectFieldType(element: HTMLSelectElement | Element): FieldType {
+  // Helper function to check if a type matches using the correct priority
+  const matches = (type: FieldType, text: string): boolean => {
+    if (type === "text" || type === "unknown") return false;
+    return FIELD_PATTERNS[type].test(text);
+  };
+
+  // For native select elements, use the original logic path
+  if (element instanceof HTMLSelectElement) {
+    // 1. HIGH PRIORITY: Autocomplete token
+    const autocompleteType = parseAutocompleteValue(element);
+    if (autocompleteType) return autocompleteType;
+
+    // 2. HIGH PRIORITY: aria-label (explicit)
+    const ariaLabel = element.getAttribute("aria-label");
+    if (ariaLabel) {
+      for (const type of FIELD_TYPE_PRIORITY) {
+        if (matches(type, ariaLabel)) return type;
+      }
+    }
+
+    // 3. MEDIUM PRIORITY: Associated label
+    const labelText = getLabelText(element);
+    if (labelText) {
+      // Clean label (remove " *", ":", etc)
+      const cleanLabel = labelText.replace(/[*:\s]+$/, "").trim();
+      for (const type of FIELD_TYPE_PRIORITY) {
+        if (matches(type, cleanLabel)) return type;
+      }
+    }
+
+    // 4. MEDIUM PRIORITY: data-* attributes
+    const dataHint = getDataAttributeHintForSelect(element);
+    if (dataHint) {
+      for (const type of FIELD_TYPE_PRIORITY) {
+        if (matches(type, dataHint)) return type;
+      }
+    }
+
+    // 5. LOW PRIORITY: name, id
+    const signals = [
+      element.name,
+      element.id,
+    ].join(" ");
+
+    for (const type of FIELD_TYPE_PRIORITY) {
+      if (matches(type, signals)) return type;
+    }
+  } else {
+    // For framework dropdowns (non-select elements), scan child options for signals
+    // 1. HIGH PRIORITY: Autocomplete token on the container
+    const autocompleteType = (() => {
+      const autocomplete = element.getAttribute("autocomplete");
+      if (!autocomplete) return null;
+      const tokens = autocomplete.toLowerCase().split(/\s+/);
+      for (const token of tokens) {
+        if (token === "off" || token === "on" || token === "billing" || token === "shipping") {
+          continue;
+        }
+        if (token in AUTOCOMPLETE_TOKENS) {
+          return AUTOCOMPLETE_TOKENS[token];
+        }
+      }
+      return null;
+    })();
+    if (autocompleteType) return autocompleteType;
+
+    // 2. HIGH PRIORITY: aria-label
+    const ariaLabel = element.getAttribute("aria-label");
+    if (ariaLabel) {
+      for (const type of FIELD_TYPE_PRIORITY) {
+        if (matches(type, ariaLabel)) return type;
+      }
+    }
+
+    // 3. MEDIUM PRIORITY: Associated label
+    const labelText = getLabelText(element as unknown as HTMLSelectElement);
+    if (labelText) {
+      const cleanLabel = labelText.replace(/[*:\s]+$/, "").trim();
+      for (const type of FIELD_TYPE_PRIORITY) {
+        if (matches(type, cleanLabel)) return type;
+      }
+    }
+
+    // 4. MEDIUM PRIORITY: data-* attributes on container or child options
+    const dataAttrs = ["data-testid", "data-cy", "data-test", "data-field", "data-name"];
+    for (const attr of dataAttrs) {
+      const value = element.getAttribute(attr);
+      if (value) {
+        for (const type of FIELD_TYPE_PRIORITY) {
+          if (matches(type, value)) return type;
+        }
+      }
+    }
+
+    // 5. LOW PRIORITY: name, id on container
+    const signals = [
+      element.getAttribute("name"),
+      element.getAttribute("id"),
+    ].join(" ");
+
+    for (const type of FIELD_TYPE_PRIORITY) {
+      if (matches(type, signals)) return type;
+    }
+  }
+
+  return "unknown";
+}
+
+/**
+ * Searches for data-* attributes that may indicate the field type
+ * Common in testing: data-testid, data-cy, data-test, data-field
+ */
+function getDataAttributeHintForSelect(select: HTMLSelectElement): string {
+  const dataAttrs = ["data-testid", "data-cy", "data-test", "data-field", "data-name"];
+  for (const attr of dataAttrs) {
+    const value = select.getAttribute(attr);
+    if (value) return value;
+  }
+  return "";
 }
