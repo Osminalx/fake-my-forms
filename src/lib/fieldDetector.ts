@@ -184,7 +184,7 @@ export function getLabelText(input: HTMLInputElement | HTMLSelectElement | HTMLT
  * The autocomplete can have multiple tokens: "given-name billing home"
  * We are interested in the first one that is not "billing", "shipping", "off"
  */
-export function parseAutocompleteValue(input: HTMLInputElement | HTMLSelectElement): FieldType | null {
+export function parseAutocompleteValue(input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): FieldType | null {
   const autocomplete = input.getAttribute("autocomplete");
   if (!autocomplete) return null;
 
@@ -207,7 +207,7 @@ export function parseAutocompleteValue(input: HTMLInputElement | HTMLSelectEleme
  * Searches for data-* attributes that may indicate the field type
  * Common in testing: data-testid, data-cy, data-test, data-field
  */
-function getDataAttributeHint(input: HTMLInputElement): string {
+function getDataAttributeHint(input: HTMLInputElement | HTMLTextAreaElement): string {
   const dataAttrs = ["data-testid", "data-cy", "data-test", "data-field", "data-name"];
   for (const attr of dataAttrs) {
     const value = input.getAttribute(attr);
@@ -269,7 +269,7 @@ const FIELD_TYPE_PRIORITY: FieldType[] = [
  * 3. name, id, placeholder
  * 4. input.type (fallback)
  */
-export function detectFieldType(input: HTMLInputElement): FieldType {
+export function detectFieldType(input: HTMLInputElement | HTMLTextAreaElement): FieldType {
   // 1. HIGH PRIORITY: Autocomplete token
   const autocompleteType = parseAutocompleteValue(input);
   if (autocompleteType) return autocompleteType;
@@ -317,7 +317,10 @@ export function detectFieldType(input: HTMLInputElement): FieldType {
     if (matches(type, signals)) return type;
   }
 
-  // 6. FALLBACK: native input.type
+  // 6. FALLBACK: element type
+  // Textareas are always text entry fields — fill with lorem if nothing else matches
+  if (input instanceof HTMLTextAreaElement) return "text";
+
   // IMPORTANT: we return "unknown" (no fill) instead of "text" (lorem ipsum)
   // to avoid incorrect filling when we cannot detect the type
   if (input.type === "email") return "email";

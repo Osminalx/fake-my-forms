@@ -141,7 +141,8 @@ export function validateSelectValue(
       const optionValue = (option.value ?? "").toLowerCase();
 
       if (optionText.includes(search) || optionValue.includes(search) ||
-          search.includes(optionText) || search.includes(optionValue)) {
+          (optionText.length > 0 && search.includes(optionText)) ||
+          (optionValue.length > 0 && search.includes(optionValue))) {
         matched = option.text || option.value;
         break;
       }

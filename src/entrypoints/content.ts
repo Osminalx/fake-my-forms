@@ -80,16 +80,20 @@ export function fillSelect(
 
   // Iterate options in DOM order, find first match
   for (const option of Array.from(select.options)) {
+    // Skip disabled and empty-value placeholder options
+    if (option.disabled || option.value === "") continue;
+
     const optionText = (option.text ?? "").toLowerCase();
     const optionValue = (option.value ?? "").toLowerCase();
 
     // REQ-9: case-insensitive partial substring matching
     // Match if either text or value contains the search term, or vice versa
+    // Guard against empty strings — an empty optionText/optionValue matches everything
     const matches =
       optionText.includes(search) ||
       optionValue.includes(search) ||
-      search.includes(optionText) ||
-      search.includes(optionValue);
+      (optionText.length > 0 && search.includes(optionText)) ||
+      (optionValue.length > 0 && search.includes(optionValue));
 
     if (matches) {
       // REQ-4: set select.value — uses patched prototype from tests/setup.ts
@@ -250,6 +254,24 @@ export function handleFrameworkDropdown(
   return true; // Optimistic — actual fill is async
 }
 
+/**
+ * Picks a random valid option from a select element.
+ * Used as fallback when fieldType is unknown and no semantic value can be generated.
+ */
+function fillSelectRandom(select: HTMLSelectElement): boolean {
+  if (select.disabled || select.multiple) return false;
+  const validOptions = Array.from(select.options).filter(
+    (o) => !o.disabled && o.value !== "",
+  );
+  if (validOptions.length === 0) return false;
+
+  const picked = validOptions[Math.floor(Math.random() * validOptions.length)];
+  select.value = picked.value;
+  select.dispatchEvent(new Event("input", { bubbles: true }));
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  return true;
+}
+
 export function countFillableInputs(): number {
   const elements = document.querySelectorAll(
     'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select',
@@ -335,10 +357,7 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
     if (el instanceof HTMLInputElement && el.type === 'file') return;
 
     const input = el as HTMLInputElement | HTMLTextAreaElement;
-    const fieldType =
-      input instanceof HTMLInputElement
-        ? detectFieldType(input)
-        : ("text" as const);
+    const fieldType = detectFieldType(input);
     fields.push({
       id: input.id || `_fmf_${autoId++}`,
       element: input,
@@ -382,7 +401,9 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
             if (filled) stats.filled++; else stats.skipped++;
           }
         } else if (group.primary.element instanceof HTMLSelectElement) {
-          const filled = fillSelect(group.primary.element, value);
+          const filled = value
+            ? fillSelect(group.primary.element, value) || fillSelectRandom(group.primary.element)
+            : fillSelectRandom(group.primary.element);
           if (filled) stats.filled++; else stats.skipped++;
         } else {
           const el = group.primary.element;
@@ -402,7 +423,9 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
             if (filled) stats.filled++; else stats.skipped++;
           }
         } else if (group.confirm.element instanceof HTMLSelectElement) {
-          const filled = fillSelect(group.confirm.element, value);
+          const filled = value
+            ? fillSelect(group.confirm.element, value) || fillSelectRandom(group.confirm.element)
+            : fillSelectRandom(group.confirm.element);
           if (filled) stats.filled++; else stats.skipped++;
         } else {
           const el = group.confirm.element;
@@ -424,23 +447,24 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
       );
       const field = group.field as SemanticField & { isFrameworkDropdown?: boolean; frameworkType?: SelectElementType };
       console.debug('[fake-my-forms][fill] single', field.fieldType, field.id, '→ value:', value, '| isFrameworkDropdown:', field.isFrameworkDropdown);
-      if (value) {
-        if (field.isFrameworkDropdown && field.frameworkType) {
-          if (field.fieldType === 'unknown') {
-            console.debug('[fake-my-forms][fill] SKIP framework dropdown with unknown fieldType', field.id);
-            stats.skipped++;
-          } else {
-            const filled = handleFrameworkDropdown(field.element as HTMLElement, value, field.frameworkType);
-            if (filled) stats.filled++; else stats.skipped++;
-          }
-        } else if (group.field.element instanceof HTMLSelectElement) {
-          const filled = fillSelect(group.field.element, value);
-          if (filled) stats.filled++; else stats.skipped++;
+      if (field.isFrameworkDropdown && field.frameworkType) {
+        if (!value || field.fieldType === 'unknown') {
+          console.debug('[fake-my-forms][fill] SKIP framework dropdown with unknown fieldType', field.id);
+          stats.skipped++;
         } else {
-          const el = group.field.element;
-          if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-            fillInput(el, value);
-          }
+          const filled = handleFrameworkDropdown(field.element as HTMLElement, value, field.frameworkType);
+          if (filled) stats.filled++; else stats.skipped++;
+        }
+      } else if (group.field.element instanceof HTMLSelectElement) {
+        // Native select: try semantic fill first, fall back to random option pick
+        const filled = value
+          ? fillSelect(group.field.element, value) || fillSelectRandom(group.field.element)
+          : fillSelectRandom(group.field.element);
+        if (filled) stats.filled++; else stats.skipped++;
+      } else if (value) {
+        const el = group.field.element;
+        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+          fillInput(el, value);
         }
       }
     }

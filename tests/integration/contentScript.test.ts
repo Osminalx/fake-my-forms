@@ -451,3 +451,144 @@ describe("getStoredFakerConfig — keyboard shortcut storage reads", () => {
     cleanup(form);
   });
 });
+
+// ---------------------------------------------------------------------------
+// fillSelect — select element support
+// ---------------------------------------------------------------------------
+describe("fillSelect (via FILL_FORM message)", () => {
+  it("picks a non-empty option from a vanilla select", () => {
+    const form = makeForm(`
+      <select name="country">
+        <option value="">Choose a country</option>
+        <option value="us">United States</option>
+        <option value="es">Spain</option>
+        <option value="de">Germany</option>
+      </select>
+    `);
+    const select = form.querySelector<HTMLSelectElement>("select")!;
+
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config: {} });
+    }
+
+    expect(select.value).not.toBe("");
+    expect(["us", "es", "de"]).toContain(select.value);
+    cleanup(form);
+  });
+
+  it("does not change value when only a placeholder option exists", () => {
+    const form = makeForm(`
+      <select name="empty">
+        <option value="">-- select --</option>
+      </select>
+    `);
+    const select = form.querySelector<HTMLSelectElement>("select")!;
+
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config: {} });
+    }
+
+    expect(select.value).toBe("");
+    cleanup(form);
+  });
+
+  it("dispatches input and change events for framework reactivity", () => {
+    const form = makeForm(`
+      <select name="role">
+        <option value="admin">Admin</option>
+        <option value="user">User</option>
+      </select>
+    `);
+    const select = form.querySelector<HTMLSelectElement>("select")!;
+
+    const inputEvents: Event[] = [];
+    const changeEvents: Event[] = [];
+    select.addEventListener("input", (e) => inputEvents.push(e));
+    select.addEventListener("change", (e) => changeEvents.push(e));
+
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config: {} });
+    }
+
+    expect(inputEvents.length).toBeGreaterThanOrEqual(1);
+    expect(changeEvents.length).toBeGreaterThanOrEqual(1);
+    cleanup(form);
+  });
+
+  it("never picks a disabled option", () => {
+    const form = makeForm(`
+      <select name="size">
+        <option value="">Pick size</option>
+        <option value="s" disabled>Small (out of stock)</option>
+        <option value="m">Medium</option>
+        <option value="l">Large</option>
+      </select>
+    `);
+    const select = form.querySelector<HTMLSelectElement>("select")!;
+
+    // Run many times to ensure "s" is never picked
+    for (let i = 0; i < 30; i++) {
+      for (const listener of messageListeners) {
+        listener({ type: "FILL_FORM", config: {} });
+      }
+      expect(select.value).not.toBe("s");
+      expect(select.value).not.toBe("");
+    }
+    cleanup(form);
+  });
+
+  it("fills select alongside inputs in one pass", () => {
+    const form = makeForm(`
+      <input name="email" type="email" />
+      <select name="plan">
+        <option value="">Choose</option>
+        <option value="free">Free</option>
+        <option value="pro">Pro</option>
+      </select>
+    `);
+    const input = form.querySelector<HTMLInputElement>("input")!;
+    const select = form.querySelector<HTMLSelectElement>("select")!;
+
+    const config = {
+      email: { enabled: true, probability: 100, customValues: ["test@example.com"] },
+    };
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config });
+    }
+
+    expect(input.value).toBe("test@example.com");
+    expect(["free", "pro"]).toContain(select.value);
+    cleanup(form);
+  });
+
+  it("is counted by GET_INPUT_STATS", () => {
+    const form = makeForm(`
+      <input name="name" />
+      <select name="gender">
+        <option value="m">Male</option>
+        <option value="f">Female</option>
+      </select>
+    `);
+
+    let count = 0;
+    for (const listener of messageListeners) {
+      const result = listener({ type: "GET_INPUT_STATS" });
+      if (result instanceof Promise) {
+        result.then((r: unknown) => {
+          if (r && typeof r === "object" && "count" in r) {
+            count = (r as { count: number }).count;
+          }
+        });
+      }
+    }
+
+    // Allow the promise to resolve
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        expect(count).toBeGreaterThanOrEqual(2);
+        cleanup(form);
+        resolve();
+      }, 10);
+    });
+  });
+});
