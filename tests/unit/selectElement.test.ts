@@ -56,10 +56,11 @@ describe("detectSelectElementType", () => {
     expect(detectSelectElementType(div)).toBe("react-dropdown");
   });
 
-  it("should return 'vue-dropdown' for element with role='combobox'", () => {
+  it("should return 'react-dropdown' for element with role='combobox' and no framework indicators", () => {
     const div = document.createElement("div");
     div.setAttribute("role", "combobox");
-    expect(detectSelectElementType(div)).toBe("vue-dropdown");
+    // react-select is the dominant library using role="combobox"; default to react-dropdown
+    expect(detectSelectElementType(div)).toBe("react-dropdown");
   });
 
   it("should return null for regular div with no dropdown indicators", () => {

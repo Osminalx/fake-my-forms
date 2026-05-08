@@ -116,9 +116,45 @@ export function fillSelect(
 }
 
 /**
- * Handles framework-specific dropdowns (Vue/React) by simulating user interaction.
- * Clicks to open the dropdown, waits for options to render, finds matching option,
- * and clicks it. Dispatches change event on the container.
+ * Finds the option list for a framework dropdown.
+ *
+ * Lookup order (most specific → most general):
+ * 1. aria-controls → getElementById → querySelectorAll('[role="option"]')
+ * 2. Any [role="listbox"] in the document → its [role="option"] children
+ * 3. Direct document-wide [role="option"] scan (catches all portals)
+ */
+function findDropdownOptions(element: HTMLElement): Element[] {
+  // 1. aria-controls is set by React Select when the menu is open
+  const listboxId = element.getAttribute('aria-controls');
+  if (listboxId && listboxId !== element.id) {
+    const listbox = document.getElementById(listboxId);
+    if (listbox) {
+      const opts = Array.from(listbox.querySelectorAll('[role="option"]'));
+      if (opts.length > 0) return opts;
+      // Listbox found but no options yet — caller will retry
+      return [];
+    }
+  }
+
+  // 2. Any visible listbox in the document (React Select portal, Vue Select portal, etc.)
+  const allListboxes = document.querySelectorAll('[role="listbox"]');
+  for (const lb of Array.from(allListboxes)) {
+    const opts = Array.from(lb.querySelectorAll('[role="option"]'));
+    if (opts.length > 0) return opts;
+  }
+
+  // 3. Flat document scan — some libraries don't nest options inside a listbox
+  return Array.from(document.querySelectorAll('[role="option"]'));
+}
+
+/**
+ * Handles framework-specific dropdowns (React Select, Vue Select, etc.)
+ * by simulating the user interaction sequence:
+ *   1. Focus the input
+ *   2. Type the search value (triggers onInputChange → menu opens)
+ *   3. Wait for the menu portal to render
+ *   4. Find matching option via aria-controls listbox or document scan
+ *   5. Click the option
  */
 export function handleFrameworkDropdown(
   element: HTMLElement,
@@ -140,7 +176,7 @@ export function handleFrameworkDropdown(
     elementType,
   });
 
-  // Guard: disabled
+  // Guard: disabled element or disabled container
   if (
     element.hasAttribute('disabled') ||
     element.getAttribute('aria-disabled') === 'true' ||
@@ -150,108 +186,120 @@ export function handleFrameworkDropdown(
     return false;
   }
 
-  // For input-based framework selects (React Select, Vue Select with inner input):
-  // Typing into the input triggers onInputChange → React Select calls onMenuOpen() internally.
-  // This is more reliable than dispatching mousedown, which requires the component
-  // to already be in a focused state to open the menu.
-  //
-  // For non-input containers: fall back to mousedown on the control.
-  const nativeInputSetter = element instanceof HTMLInputElement
+  const isInput = element instanceof HTMLInputElement;
+  const nativeInputSetter = isInput
     ? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
     : null;
 
+  const closeDropdown = () => {
+    try {
+      element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    } catch { /* ignore */ }
+  };
+
   try {
-    if (nativeInputSetter) {
-      dbg('open strategy: type value into input', element.id);
-      nativeInputSetter.call(element, value);
-      element.dispatchEvent(new Event('input', { bubbles: true }));
-    } else {
-      const control =
-        element.closest<HTMLElement>('[class*="-control"], [class*="__control"]') ??
-        element;
-      dbg('open strategy: mousedown on control', { id: element.id, controlClass: control.className });
-      control.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 }));
-      control.click();
-    }
+    // Open the dropdown by clicking the control wrapper.
+    // React Select's onControlMouseDown handler opens the menu on mousedown.
+    // We do NOT type a search value here — we want ALL options visible so we can
+    // pick the best match. Typing a locale-specific generated value (e.g. an Arabic
+    // city name) would filter React Select's option list to zero results.
+    const control =
+      element.closest<HTMLElement>('[class*="-control"], [class*="__control"]') ??
+      element.parentElement ?? element;
+
+    dbg('open strategy: mousedown on control', { id: element.id, controlClass: control.className });
+
+    control.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, composed: true }));
+    control.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, button: 0, composed: true }));
+    control.click();
+
+    // Focus the inner input so React Select keeps the menu open
+    if (isInput) element.focus();
+
     dbg('open dispatched', element.id);
   } catch (e) {
     dbg('open dispatch THREW', e);
     return false;
   }
 
-  // Wait for framework to render options (may be portaled anywhere in the document)
-  setTimeout(() => {
-    dbg('setTimeout fired', { id: element.id, isConnected: element.isConnected });
+  // React Select renders the menu portal asynchronously after setState.
+  // We poll with exponential backoff to handle slow renders.
+  // Delays: 150ms, 350ms, 700ms (total ~1.2s max wait)
+  const RETRY_DELAYS = [150, 350, 700];
 
-    // Element may have been removed by a re-render between click and timeout
+  const trySelectOption = (attempt: number) => {
+    dbg(`setTimeout fired (attempt ${attempt})`, { id: element.id, isConnected: element.isConnected });
+
     if (!element.isConnected) {
-      dbg('element disconnected after click, aborting', element.id);
+      dbg('element disconnected, aborting', element.id);
       return;
     }
 
-    // Portal-aware: search the entire document, not just element's subtree
-    const options = document.querySelectorAll('[role="option"]');
-    dbg('options found in document', options.length, Array.from(options).map(o => o.textContent?.trim()));
+    // If the menu didn't open (aria-expanded is still false), re-try the open gesture
+    const menuExpanded = element.getAttribute('aria-expanded') === 'true';
+    dbg('aria-expanded', menuExpanded);
 
-    const closeDropdown = () => {
-      dbg('closing dropdown via Escape', element.id);
-      try {
-        element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-      } catch (e) {
-        dbg('Escape dispatch threw', e);
-      }
-    };
+    const options = findDropdownOptions(element);
+    dbg('options found', options.length, options.map(o => o.textContent?.trim()));
 
     if (options.length === 0) {
+      if (attempt <= RETRY_DELAYS.length) {
+        dbg(`no options yet (attempt ${attempt}), retrying…`, element.id);
+        setTimeout(() => trySelectOption(attempt + 1), RETRY_DELAYS[attempt - 1] ?? 700);
+        return;
+      }
       console.warn('[fake-my-forms] No options found after opening framework dropdown', element);
       closeDropdown();
       return;
     }
 
+    // Filter out disabled options
+    const enabledOptions = options.filter(o => o.getAttribute('aria-disabled') !== 'true');
+    if (enabledOptions.length === 0) {
+      console.warn('[fake-my-forms] All options are disabled', element);
+      closeDropdown();
+      return;
+    }
+
     const search = value.toLowerCase().trim();
-    dbg('searching for', search, 'among', options.length, 'options');
+    dbg('searching for', search, 'among', enabledOptions.length, 'options');
 
-    for (const option of Array.from(options)) {
-      if (option.getAttribute('aria-disabled') === 'true') continue;
-
+    // Try semantic match first (bidirectional substring, guard empty strings)
+    let matched: Element | undefined;
+    for (const option of enabledOptions) {
       const text = (option.textContent ?? '').toLowerCase().trim();
       const dataValue = (option.getAttribute('data-value') ?? '').toLowerCase();
 
-      // Bidirectional substring match (same logic as fillSelect)
       if (
         text.includes(search) ||
-        search.includes(text) ||
+        (text.length > 0 && search.includes(text)) ||
         dataValue.includes(search) ||
-        search.includes(dataValue)
+        (dataValue.length > 0 && search.includes(dataValue))
       ) {
-        dbg('match found, clicking option', text);
-        try {
-          (option as HTMLElement).click();
-          dbg('option.click() succeeded');
-        } catch (e) {
-          dbg('option.click() THREW', e);
-        }
-        try {
-          element.dispatchEvent(new Event('change', { bubbles: true }));
-        } catch (e) {
-          dbg('change dispatch threw', e);
-        }
-        return;
+        matched = option;
+        break;
       }
     }
 
-    console.warn(`[fake-my-forms] No matching option found for '${value}'. Available: [${Array.from(options).map(o => o.textContent?.trim()).join(', ')}]`, element);
-    // Clear the typed search text so the input doesn't show a half-filled value
-    if (nativeInputSetter && element.isConnected) {
-      try {
-        nativeInputSetter.call(element, '');
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-      } catch { /* ignore */ }
+    // Fall back to a random option — the generated value may be locale-specific
+    // and not match any of the dropdown's available options (e.g. an Arabic city
+    // name in a dropdown of Indian states).
+    if (!matched) {
+      matched = enabledOptions[Math.floor(Math.random() * enabledOptions.length)];
+      dbg('no semantic match, picking random option', matched.textContent?.trim());
+    } else {
+      dbg('semantic match found', matched.textContent?.trim());
     }
-    closeDropdown();
-  }, 300);
 
-  return true; // Optimistic — actual fill is async
+    try {
+      (matched as HTMLElement).click();
+    } catch (e) {
+      dbg('option.click() THREW', e);
+    }
+  };
+
+  setTimeout(() => trySelectOption(1), RETRY_DELAYS[0]);
+  return true; // Optimistic — actual fill happens asynchronously
 }
 
 /**
@@ -303,6 +351,11 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
     skipped: 0,
     frameworkDropdowns: 0,
   };
+
+  // Framework dropdowns that were disabled during the first pass (e.g. city locked until state is chosen).
+  // We retry these after a delay so a state-selection has time to unlock them.
+  type DeferredDropdown = { element: HTMLElement; value: string; frameworkType: SelectElementType };
+  const deferredDropdowns: DeferredDropdown[] = [];
 
   elements.forEach((el) => {
     // Handle select elements (native)
@@ -452,8 +505,22 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
           console.debug('[fake-my-forms][fill] SKIP framework dropdown with unknown fieldType', field.id);
           stats.skipped++;
         } else {
-          const filled = handleFrameworkDropdown(field.element as HTMLElement, value, field.frameworkType);
-          if (filled) stats.filled++; else stats.skipped++;
+          const el = field.element as HTMLElement;
+          // If the element is currently disabled, defer it — another field (e.g. state)
+          // may unlock it after its async fill completes.
+          const isDisabledNow =
+            el.hasAttribute('disabled') ||
+            el.getAttribute('aria-disabled') === 'true' ||
+            el.closest('[aria-disabled="true"]') !== null;
+
+          if (isDisabledNow) {
+            console.debug('[fake-my-forms][fill] DEFER disabled framework dropdown (will retry)', field.id);
+            deferredDropdowns.push({ element: el, value, frameworkType: field.frameworkType });
+            stats.skipped++;
+          } else {
+            const filled = handleFrameworkDropdown(el, value, field.frameworkType);
+            if (filled) stats.filled++; else stats.skipped++;
+          }
         }
       } else if (group.field.element instanceof HTMLSelectElement) {
         // Native select: try semantic fill first, fall back to random option pick
@@ -472,6 +539,27 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 
   // Log summary statistics
   console.debug('[fake-my-forms] fillAllInputs summary:', stats);
+
+  // Retry dropdowns that were disabled in the first pass (e.g. city locked until state is picked).
+  // We wait 800 ms: 300 ms for state's menu to open + option click + React re-render to unlock city.
+  if (deferredDropdowns.length > 0) {
+    console.debug('[fake-my-forms] Scheduling deferred dropdown retry in 800ms', deferredDropdowns.map(d => d.element.id));
+    setTimeout(() => {
+      for (const { element, value, frameworkType } of deferredDropdowns) {
+        const stillDisabled =
+          element.hasAttribute('disabled') ||
+          element.getAttribute('aria-disabled') === 'true' ||
+          element.closest('[aria-disabled="true"]') !== null;
+
+        if (stillDisabled) {
+          console.debug('[fake-my-forms][deferred] Still disabled, skipping', element.id);
+          continue;
+        }
+        console.debug('[fake-my-forms][deferred] Retrying now-enabled dropdown', element.id);
+        handleFrameworkDropdown(element, value, frameworkType);
+      }
+    }, 800);
+  }
 }
 
 async function getStoredFakerConfig(): Promise<FakerConfig> {

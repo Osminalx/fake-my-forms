@@ -24,6 +24,14 @@ export type SelectElementType = 'native-select' | 'vue-dropdown' | 'react-dropdo
 /**
  * Detects if an element is a native select or a framework-specific custom dropdown.
  * Returns the element type or null if not a select/dropdown.
+ *
+ * Detection priority:
+ * 1. Native <select>
+ * 2. React fiber internal property (definitive)
+ * 3. React Select class/id naming conventions (css-*, react-select-*, __input)
+ * 4. Vue data-v-* scope attributes (definitive)
+ * 5. ARIA role="combobox"/"listbox" with Vue class indicators
+ * 6. Generic class/role fallbacks
  */
 export function detectSelectElementType(element: Element): SelectElementType | null {
   // Native HTML select element
@@ -31,45 +39,51 @@ export function detectSelectElementType(element: Element): SelectElementType | n
     return 'native-select';
   }
 
-  // Vue.js detection: check for Vue-specific attributes and properties
-  // Check if element has any attribute starting with "data-v-"
-  const hasVueDataAttr = Array.from(element.attributes).some(attr => attr.name.startsWith('data-v-'));
-  if (
-    hasVueDataAttr ||
-    '__vue__' in element ||
-    element.querySelector('[data-v-]') !== null
-  ) {
-    return 'vue-dropdown';
+  // React detection via internal fiber property (most reliable — set by React runtime)
+  const reactFiberKey = Object.keys(element).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactProps$'));
+  if (element.hasAttribute('data-reactroot') || reactFiberKey !== undefined) {
+    return 'react-dropdown';
   }
 
-  // React detection: check for React-specific internal properties
-  const reactFiberKey = Object.keys(element).find(k => k.startsWith('__reactFiber$'));
+  // React Select naming conventions:
+  // IDs: "react-select-N-input", classes: "css-*", "*__input", "*__control"
+  const elementId = element.getAttribute('id') ?? '';
+  const classAttr = element.className ?? '';
   if (
-    element.hasAttribute('data-reactroot') ||
-    reactFiberKey !== undefined
+    /^react-select-/.test(elementId) ||
+    /react-select/i.test(classAttr) ||
+    // CSS-in-JS class pattern used by react-select (css-<hash>-*)
+    (/css-[a-z0-9]+-/.test(classAttr) && element.getAttribute('role') === 'combobox') ||
+    // react-select generated input classes like "subjects-auto-complete__input"
+    /__input$/.test(classAttr.trim().split(/\s+/).at(-1) ?? '')
   ) {
     return 'react-dropdown';
   }
 
-  // ARIA role-based detection for custom dropdowns
+  // Vue.js detection: data-v-* scope attributes or __vue__ internal property
+  const hasVueDataAttr = Array.from(element.attributes).some(attr => attr.name.startsWith('data-v-'));
+  if (hasVueDataAttr || '__vue__' in element) {
+    return 'vue-dropdown';
+  }
+
+  // ARIA role-based detection — check for Vue indicators on the element or its container
   const role = element.getAttribute('role');
   if (role === 'combobox' || role === 'listbox') {
-    // For ARIA dropdowns, try to determine framework by checking for indicators
-    // Default to vue-dropdown as many Vue dropdown libraries use ARIA roles
-    if (element.querySelector('[data-v-]')) {
+    const container = element.closest('[class*="v-select"], [class*="vue-select"]') ??
+      element.closest('[data-v-]');
+    if (container) return 'vue-dropdown';
+    // Check class patterns on parent for Vue Select
+    if (/vue-select|v-select/i.test(element.closest('[class]')?.className ?? '')) {
       return 'vue-dropdown';
     }
-    return 'vue-dropdown'; // Default fallback for ARIA dropdowns
-  }
-
-  // Check for common dropdown class patterns
-  const classAttr = element.className || '';
-  if (/dropdown|select-menu|vue-select|v-select/i.test(classAttr)) {
-    return 'vue-dropdown';
-  }
-  if (/react-select/i.test(classAttr)) {
+    // Default: treat any unrecognised combobox/listbox as react-dropdown
+    // since react-select is by far the most common library using these ARIA roles
     return 'react-dropdown';
   }
+
+  // Class-based fallbacks
+  if (/vue-select|v-select/i.test(classAttr)) return 'vue-dropdown';
+  if (/dropdown|select-menu/i.test(classAttr)) return 'vue-dropdown';
 
   return null;
 }
