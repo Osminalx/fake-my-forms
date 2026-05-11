@@ -24,6 +24,68 @@ export type SelectElementType =
 	| "vue-dropdown"
 	| "react-dropdown";
 
+export function getInputsOfType(
+	element: Element,
+	type: "radio" | "checkbox",
+): HTMLInputElement[] {
+	const children = element.querySelectorAll<HTMLInputElement>(
+		`input[type="${type}"]`,
+	);
+
+	return Array.from(children);
+}
+
+export function findGroupContainer(
+	input: HTMLInputElement,
+	type: "radio" | "checkbox",
+): Element {
+	let currentElement = input.parentElement;
+
+	while (currentElement?.parentElement) {
+		if (
+			getInputsOfType(currentElement.parentElement, type).length >
+			getInputsOfType(currentElement, type).length
+		) {
+			return currentElement;
+		}
+		currentElement = currentElement.parentElement;
+	}
+
+	return currentElement ?? input;
+}
+
+export function detectRadioElement(
+	element: HTMLInputElement,
+): HTMLInputElement[] {
+	const name = element.name;
+	if (name) {
+		return Array.from(
+			document.querySelectorAll<HTMLInputElement>(
+				`input[type="radio"][name="${name}"]`,
+			),
+		);
+	}
+
+	const groupContainer = findGroupContainer(element, "radio");
+	return getInputsOfType(groupContainer, "radio");
+}
+
+export function detectCheckboxElement(
+	element: HTMLInputElement,
+): HTMLInputElement[] {
+	const name = element.name;
+	if (name) {
+		return Array.from(
+			document.querySelectorAll<HTMLInputElement>(
+				`input[type="checkbox"][name="${name}"]`,
+			),
+		);
+	}
+
+	const groupContainer = findGroupContainer(element, "checkbox");
+	return getInputsOfType(groupContainer, "checkbox");
+}
+
 /**
  * Detects if an element is a native select or a framework-specific custom dropdown.
  * Returns the element type or null if not a select/dropdown.
@@ -546,4 +608,3 @@ function getDataAttributeHintForSelect(select: HTMLSelectElement): string {
 	}
 	return "";
 }
-
