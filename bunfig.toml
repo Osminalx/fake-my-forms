@@ -1,2 +1,3 @@
 [test]
 preload = ["./tests/svelte-plugin.ts", "./tests/setup.ts"]
+minimumReleaseAge = 1440
