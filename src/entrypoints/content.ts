@@ -9,6 +9,8 @@ import {
 	detectFieldType,
 	detectSelectElementType,
 	detectSelectFieldType,
+	detectRadioElement,
+	detectCheckboxElement,
 	getLabelText,
 	type SelectElementType,
 } from "@/lib/fieldDetector";
@@ -370,9 +372,110 @@ function fillSelectRandom(select: HTMLSelectElement): boolean {
 	return true;
 }
 
+/**
+ * Sets checked state on a radio/checkbox using the native property setter
+ * to trigger framework change detection (React, Vue, etc.).
+ * Mirrors the pattern used in fillInput() for the `value` property.
+ */
+function fillCheckboxOrRadio(input: HTMLInputElement, checked: boolean) {
+	const nativeCheckedSetter = Object.getOwnPropertyDescriptor(
+		window.HTMLInputElement.prototype,
+		"checked",
+	)?.set;
+
+	try {
+		nativeCheckedSetter?.call(input, checked);
+		input.dispatchEvent(new Event("input", { bubbles: true }));
+		input.dispatchEvent(new Event("change", { bubbles: true }));
+	} catch (e) {
+		console.debug("[fake-my-forms] fillCheckboxOrRadio skipped", e);
+	}
+}
+
+/**
+ * Processes all radio button groups in the document.
+ * For each group, picks ONE random option and selects it.
+ *
+ * Uses detectRadioElement() to find related radios (by name attribute
+ * or by structural container grouping). Skips disabled radios.
+ *
+ * Returns the number of radio groups filled.
+ */
+function processRadioGroups(): number {
+	const allRadios = document.querySelectorAll<HTMLInputElement>(
+		'input[type="radio"]',
+	);
+	const processed = new Set<HTMLInputElement>();
+	let filled = 0;
+
+	for (const radio of allRadios) {
+		if (processed.has(radio) || radio.disabled) continue;
+
+		const group = detectRadioElement(radio);
+		group.forEach((r) => processed.add(r));
+
+		const enabled = group.filter((r) => !r.disabled);
+		if (enabled.length === 0) continue;
+
+		const picked = enabled[Math.floor(Math.random() * enabled.length)];
+		fillCheckboxOrRadio(picked, true);
+		filled++;
+	}
+
+	return filled;
+}
+
+/**
+ * Processes all checkbox groups in the document.
+ * For each group, picks a random number (0 to N) of options and selects them.
+ *
+ * - 0 means the group is skipped entirely (all checkboxes remain unchecked)
+ * - 1 to N selects that many random checkboxes from the group
+ *
+ * Uses detectCheckboxElement() to find related checkboxes (by name attribute
+ * or by structural container grouping). Skips disabled checkboxes.
+ *
+ * Returns the number of checkbox groups filled (where count > 0).
+ */
+function processCheckboxGroups(): number {
+	const allCheckboxes = document.querySelectorAll<HTMLInputElement>(
+		'input[type="checkbox"]',
+	);
+	const processed = new Set<HTMLInputElement>();
+	let filled = 0;
+
+	for (const cb of allCheckboxes) {
+		if (processed.has(cb) || cb.disabled) continue;
+
+		const group = detectCheckboxElement(cb);
+		group.forEach((c) => processed.add(c));
+
+		const enabled = group.filter((c) => !c.disabled);
+		if (enabled.length === 0) continue;
+
+		// Random count between 0 and enabled.length (inclusive)
+		const count = Math.floor(Math.random() * (enabled.length + 1));
+		if (count === 0) continue; // skip the group entirely
+
+		// Fisher-Yates shuffle, take first `count`
+		const shuffled = [...enabled];
+		for (let i = shuffled.length - 1; i > 0; i--) {
+			const j = Math.floor(Math.random() * (i + 1));
+			[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+		}
+
+		for (const item of shuffled.slice(0, count)) {
+			fillCheckboxOrRadio(item, true);
+		}
+		filled++;
+	}
+
+	return filled;
+}
+
 export function countFillableInputs(): number {
 	const elements = document.querySelectorAll(
-		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select',
+		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="file"]), textarea, select',
 	);
 
 	// Filter out disabled and multiple selects (REQ-1)
@@ -386,6 +489,12 @@ export function countFillableInputs(): number {
 
 // Exported for testing purposes
 export function fillAllInputs(config: FakerConfig, locale?: string) {
+	// --- Radio / Checkbox pass ---
+	// Process these FIRST so that conditional fields (revealed by radio/checkbox selection)
+	// are visible when the main fill pass runs.
+	const radioFilled = processRadioGroups();
+	const checkboxFilled = processCheckboxGroups();
+
 	// Extended query: include framework dropdowns (Vue/React custom dropdowns)
 	const elements = document.querySelectorAll(
 		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select, [role="combobox"], [role="listbox"], .dropdown, .select-menu',
@@ -397,7 +506,7 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 	// Summary statistics
 	const stats = {
 		totalSelects: 0,
-		filled: 0,
+		filled: radioFilled + checkboxFilled,
 		skipped: 0,
 		frameworkDropdowns: 0,
 	};
@@ -674,7 +783,11 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 	}
 
 	// Log summary statistics
-	console.debug("[fake-my-forms] fillAllInputs summary:", stats);
+	console.debug("[fake-my-forms] fillAllInputs summary:", {
+		...stats,
+		radioGroups: radioFilled,
+		checkboxGroups: checkboxFilled,
+	});
 
 	// Retry dropdowns that were disabled in the first pass (e.g. city locked until state is picked).
 	// We wait 800 ms: 300 ms for state's menu to open + option click + React re-render to unlock city.
