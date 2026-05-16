@@ -1,10 +1,15 @@
 import { allFakers, faker } from "@faker-js/faker";
 import type { FieldType } from "./fieldDetector";
 
+export interface CustomValueWeight {
+	value: string;
+	weight: number;
+}
+
 export type FieldConfig = {
 	enabled: boolean;
 	probability: number;
-	customValues: string[];
+	customValues: CustomValueWeight[];
 };
 
 export type FakerConfig = Partial<Record<FieldType, FieldConfig>>;
@@ -60,6 +65,76 @@ function shouldFill(probability: number): boolean {
 	return Math.random() * 100 < probability;
 }
 
+export function pickWeighted(items: CustomValueWeight[]): string | null {
+	// Filter out zero/negative weights
+	const active = items.filter((item) => item.weight > 0);
+	if (active.length === 0) return null;
+	if (active.length === 1) return active[0].value;
+
+	// Build cumulative sum array
+	const cumsum: number[] = [];
+	let total = 0;
+	for (const item of active) {
+		total += item.weight;
+		cumsum.push(total);
+	}
+
+	// Pick random point
+	const r = Math.random() * total;
+
+	// Binary search for first cumsum[i] > r
+	let lo = 0;
+	let hi = active.length;
+	while (lo < hi) {
+		const mid = (lo + hi) >>> 1;
+		if (cumsum[mid] > r) {
+			hi = mid;
+		} else {
+			lo = mid + 1;
+		}
+	}
+
+	return active[lo].value;
+}
+
+/**
+ * Migrates a FakerConfig from legacy storage format (string[] customValues)
+ * to the current CustomValueWeight[] format.
+ *
+ * - string[] items → mapped to { value, weight: 100 }
+ * - Already-migrated CustomValueWeight[] → passed through unchanged
+ * - Missing/undefined/null customValues → set to []
+ * - Returns a NEW object (immutable transform — input is not mutated)
+ */
+export function migrateFieldConfig(config: FakerConfig): FakerConfig {
+	const result: FakerConfig = {};
+
+	for (const [key, field] of Object.entries(config)) {
+		if (!field) {
+			result[key] = field;
+			continue;
+		}
+
+		const cv = field.customValues as unknown;
+
+		let migrated: CustomValueWeight[];
+		if (!Array.isArray(cv) || cv.length === 0) {
+			migrated = [];
+		} else if (typeof cv[0] === "string") {
+			migrated = (cv as string[]).map((v) => ({ value: v, weight: 100 }));
+		} else {
+			migrated = cv as CustomValueWeight[];
+		}
+
+		result[key] = {
+			...field,
+			customValues: migrated,
+		};
+	}
+
+	return result;
+}
+
 export function generateValue(
 	fieldType: FieldType,
 	config: FieldConfig,
@@ -68,7 +143,9 @@ export function generateValue(
 	if (!config.enabled || !shouldFill(config.probability)) return null;
 
 	if (config.customValues.length > 0) {
-		return faker.helpers.arrayElement(config.customValues);
+		const picked = pickWeighted(config.customValues);
+		if (picked !== null) return picked;
+		// Fall through to faker generator when all weights are 0
 	}
 
 	const loc = location?.localeFaker ?? faker;

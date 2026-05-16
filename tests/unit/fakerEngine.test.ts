@@ -1,6 +1,10 @@
 import { describe, it, expect } from "bun:test";
-import { generateValue } from "../../src/lib/fakerEngine";
-import type { FieldType } from "../../src/lib/fieldDetector";
+import {
+	generateValue,
+	migrateFieldConfig,
+	pickWeighted,
+} from "../../src/lib/fakerEngine";
+import type { FakerConfig, FieldType, CustomValueWeight } from "../../src/lib/fakerEngine";
 
 const enabledConfig = { enabled: true, probability: 100, customValues: [] };
 const disabledConfig = { enabled: false, probability: 100, customValues: [] };
@@ -63,15 +67,20 @@ describe("generateValue — probability", () => {
 
 describe("generateValue — customValues", () => {
   it("picks from customValues when provided", () => {
-    const custom = ["foo", "bar", "baz"];
+    const custom: CustomValueWeight[] = [
+      { value: "foo", weight: 100 },
+      { value: "bar", weight: 100 },
+      { value: "baz", weight: 100 },
+    ];
     const config = { enabled: true, probability: 100, customValues: custom };
+    const values = custom.map((c) => c.value);
     for (let i = 0; i < 20; i++) {
-      expect(custom).toContain(generateValue("email", config));
+      expect(values).toContain(generateValue("email", config));
     }
   });
 
   it("never returns a value outside the customValues array", () => {
-    const custom = ["only-value"];
+    const custom: CustomValueWeight[] = [{ value: "only-value", weight: 100 }];
     const config = { enabled: true, probability: 100, customValues: custom };
     for (let i = 0; i < 10; i++) {
       expect(generateValue("text", config)).toBe("only-value");
@@ -82,6 +91,255 @@ describe("generateValue — customValues", () => {
     const result = generateValue("firstName", enabledConfig);
     expect(result).not.toBeNull();
   });
+});
+
+describe("generateValue — weighted custom values", () => {
+  it("with weighted custom values, higher weight values appear more frequently", () => {
+    const config = {
+      enabled: true,
+      probability: 100,
+      customValues: [
+        { value: "heavy", weight: 80 },
+        { value: "light", weight: 20 },
+      ] satisfies CustomValueWeight[],
+    };
+    let heavyCount = 0;
+    const runs = 5000;
+    for (let i = 0; i < runs; i++) {
+      if (generateValue("email", config) === "heavy") heavyCount++;
+    }
+    expect(heavyCount).toBeGreaterThan(runs * 0.75);
+    expect(heavyCount).toBeLessThan(runs * 0.85);
+  });
+
+  it("when all weights are 0, falls through to faker generator", () => {
+    const config = {
+      enabled: true,
+      probability: 100,
+      customValues: [{ value: "zeroed", weight: 0 }],
+    };
+    const result = generateValue("email", config);
+    expect(result).not.toBe("zeroed");
+    expect(result).toContain("@");
+  });
+
+  it("when customValues is empty, falls through to faker generator", () => {
+    const result = generateValue("firstName", enabledConfig);
+    expect(result).not.toBeNull();
+  });
+});
+
+describe("pickWeighted", () => {
+  it("returns null for empty array", () => {
+    expect(pickWeighted([])).toBeNull();
+  });
+
+  it("returns the single value for array of one item (any weight > 0)", () => {
+    expect(pickWeighted([{ value: "only", weight: 100 }])).toBe("only");
+    expect(pickWeighted([{ value: "only", weight: 1 }])).toBe("only");
+    expect(pickWeighted([{ value: "only", weight: 50 }])).toBe("only");
+  });
+
+  it("returns null when all weights are 0", () => {
+    expect(pickWeighted([{ value: "a", weight: 0 }, { value: "b", weight: 0 }])).toBeNull();
+  });
+
+  it("with equal weights, distribution approximates uniform", () => {
+    const items: CustomValueWeight[] = [
+      { value: "a", weight: 100 },
+      { value: "b", weight: 100 },
+      { value: "c", weight: 100 },
+    ];
+    const counts: Record<string, number> = { a: 0, b: 0, c: 0 };
+    const runs = 200;
+    for (let i = 0; i < runs; i++) {
+      const result = pickWeighted(items);
+      if (result) counts[result]++;
+    }
+    // With 3 equal items over 200 runs, each should be ~66
+    // 20% of 200 = 40, 80% of 200 = 160
+    for (const value of ["a", "b", "c"]) {
+      expect(counts[value]).toBeGreaterThan(runs * 0.2);
+      expect(counts[value]).toBeLessThan(runs * 0.8);
+    }
+  });
+
+  it("with skewed weights [90, 10], heavier item picked >60% of time", () => {
+    const items: CustomValueWeight[] = [
+      { value: "heavy", weight: 90 },
+      { value: "light", weight: 10 },
+    ];
+    let heavyCount = 0;
+    const runs = 100;
+    for (let i = 0; i < runs; i++) {
+      if (pickWeighted(items) === "heavy") heavyCount++;
+    }
+    expect(heavyCount).toBeGreaterThan(60);
+  });
+
+  it("negative or zero weights are filtered out", () => {
+    const items: CustomValueWeight[] = [
+      { value: "positive", weight: 50 },
+      { value: "zero", weight: 0 },
+      { value: "negative", weight: -10 },
+    ];
+    for (let i = 0; i < 100; i++) {
+      const result = pickWeighted(items);
+      expect(result).toBe("positive");
+    }
+  });
+});
+
+describe("migrateFieldConfig", () => {
+	it("converts legacy string[] customValues to CustomValueWeight[] with weight: 100", () => {
+		const legacyConfig = {
+			email: {
+				enabled: true,
+				probability: 100,
+				customValues: ["a@a.com", "b@b.com"],
+			},
+		} as unknown as FakerConfig;
+
+		const result = migrateFieldConfig(legacyConfig);
+
+		expect(result.email?.customValues).toEqual([
+			{ value: "a@a.com", weight: 100 },
+			{ value: "b@b.com", weight: 100 },
+		]);
+	});
+
+	it("converts empty string[] to empty CustomValueWeight[]", () => {
+		const legacyConfig = {
+			email: {
+				enabled: true,
+				probability: 100,
+				customValues: [],
+			},
+		} as unknown as FakerConfig;
+
+		const result = migrateFieldConfig(legacyConfig);
+
+		expect(result.email?.customValues).toEqual([]);
+	});
+
+	it("passes already-migrated CustomValueWeight[] through unchanged", () => {
+		const cv: CustomValueWeight[] = [
+			{ value: "x", weight: 50 },
+			{ value: "y", weight: 75 },
+		];
+		const config = {
+			email: {
+				enabled: true,
+				probability: 100,
+				customValues: cv,
+			},
+		} satisfies FakerConfig;
+
+		const result = migrateFieldConfig(config);
+
+		expect(result.email?.customValues).toEqual(cv);
+		expect(result.email?.customValues[0].value).toBe("x");
+		expect(result.email?.customValues[0].weight).toBe(50);
+	});
+
+	it("passes empty already-migrated CustomValueWeight[] through unchanged", () => {
+		const config = {
+			email: {
+				enabled: true,
+				probability: 100,
+				customValues: [],
+			},
+		} satisfies FakerConfig;
+
+		const result = migrateFieldConfig(config);
+		expect(result.email?.customValues).toEqual([]);
+	});
+
+	it("handles field with customValues that is undefined (e.g. stored without key)", () => {
+		// Simulate stored config that lacks customValues entirely
+		const legacyConfig = {
+			email: {
+				enabled: true,
+				probability: 100,
+			},
+		} as unknown as FakerConfig;
+
+		const result = migrateFieldConfig(legacyConfig);
+
+		expect(result.email?.customValues).toEqual([]);
+	});
+
+	it("handles field with customValues that is null", () => {
+		const legacyConfig = {
+			email: {
+				enabled: true,
+				probability: 100,
+				customValues: null,
+			},
+		} as unknown as FakerConfig;
+
+		const result = migrateFieldConfig(legacyConfig);
+
+		expect(result.email?.customValues).toEqual([]);
+	});
+
+	it("does not mutate the input config (immutable transform)", () => {
+		const legacyConfig = {
+			email: {
+				enabled: true,
+				probability: 100,
+				customValues: ["a", "b"],
+			},
+		} as unknown as FakerConfig;
+
+		const originalCustomValues = (legacyConfig.email as Record<string, unknown>)
+			.customValues;
+
+		migrateFieldConfig(legacyConfig);
+
+		// Verify input was not mutated
+		expect(
+			(legacyConfig.email as Record<string, unknown>).customValues,
+		).toBe(originalCustomValues);
+		expect(
+			(legacyConfig.email as Record<string, unknown>).customValues,
+		).toEqual(["a", "b"]);
+	});
+
+	it("handles config with multiple field types — some legacy, some already migrated", () => {
+		const legacyConfig = {
+			email: {
+				enabled: true,
+				probability: 100,
+				customValues: ["old@a.com", "old@b.com"],
+			},
+			firstName: {
+				enabled: true,
+				probability: 100,
+				customValues: [
+					{ value: "Alice", weight: 50 },
+					{ value: "Bob", weight: 50 },
+				] as CustomValueWeight[],
+			},
+			phone: {
+				enabled: false,
+				probability: 0,
+				customValues: [],
+			},
+		} as unknown as FakerConfig;
+
+		const result = migrateFieldConfig(legacyConfig);
+
+		expect(result.email?.customValues).toEqual([
+			{ value: "old@a.com", weight: 100 },
+			{ value: "old@b.com", weight: 100 },
+		]);
+		expect(result.firstName?.customValues).toEqual([
+			{ value: "Alice", weight: 50 },
+			{ value: "Bob", weight: 50 },
+		]);
+		expect(result.phone?.customValues).toEqual([]);
+	});
 });
 
 describe("generateValue — output format sanity checks", () => {

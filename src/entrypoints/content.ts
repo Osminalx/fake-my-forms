@@ -3,6 +3,7 @@ import {
 	createLocationContext,
 	type FakerConfig,
 	generateValue,
+	migrateFieldConfig,
 	validateSelectValue,
 } from "@/lib/fakerEngine";
 import {
@@ -832,7 +833,7 @@ async function getStoredFakerConfig(): Promise<FakerConfig> {
 	try {
 		if (storage.sync) {
 			const { fakerConfig } = await storage.sync.get("fakerConfig");
-			return (fakerConfig ?? {}) as FakerConfig;
+			return migrateFieldConfig((fakerConfig ?? {}) as FakerConfig);
 		}
 	} catch (error) {
 		console.warn("[fake-my-forms] Failed reading sync storage:", error);
@@ -841,7 +842,7 @@ async function getStoredFakerConfig(): Promise<FakerConfig> {
 	try {
 		if (storage.local) {
 			const { fakerConfig } = await storage.local.get("fakerConfig");
-			return (fakerConfig ?? {}) as FakerConfig;
+			return migrateFieldConfig((fakerConfig ?? {}) as FakerConfig);
 		}
 	} catch (error) {
 		console.warn("[fake-my-forms] Failed reading local storage:", error);

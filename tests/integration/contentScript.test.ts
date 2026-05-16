@@ -70,7 +70,7 @@ describe("fillInput (via FILL_FORM message)", () => {
     input.addEventListener("change", (e) => changeEvents.push(e));
 
     // Trigger fill via message
-    const config = { email: { enabled: true, probability: 100, customValues: ["test@test.com"] } };
+    const config = { email: { enabled: true, probability: 100, customValues: [{ value: "test@test.com", weight: 100 }] } };
     for (const listener of messageListeners) {
       listener({ type: "FILL_FORM", config });
     }
@@ -85,7 +85,7 @@ describe("fillInput (via FILL_FORM message)", () => {
     const form = makeForm('<textarea name="notes"></textarea>');
     const textarea = form.querySelector<HTMLTextAreaElement>("textarea")!;
 
-    const config = { text: { enabled: true, probability: 100, customValues: ["hello world"] } };
+    const config = { text: { enabled: true, probability: 100, customValues: [{ value: "hello world", weight: 100 }] } };
     for (const listener of messageListeners) {
       listener({ type: "FILL_FORM", config });
     }
@@ -107,7 +107,7 @@ describe("fillAllInputs — skipped input types", () => {
       const input = form.querySelector<HTMLInputElement>("input")!;
 
       const prevValue = input.value;
-      const config = { text: { enabled: true, probability: 100, customValues: ["should-not-appear"] } };
+      const config = { text: { enabled: true, probability: 100, customValues: [{ value: "should-not-appear", weight: 100 }] } };
       for (const listener of messageListeners) {
         listener({ type: "FILL_FORM", config });
       }
@@ -121,7 +121,7 @@ describe("fillAllInputs — skipped input types", () => {
     const form = makeForm('<input type="text" name="username" />');
     const input = form.querySelector<HTMLInputElement>("input")!;
 
-    const config = { username: { enabled: true, probability: 100, customValues: ["johndoe"] } };
+    const config = { username: { enabled: true, probability: 100, customValues: [{ value: "johndoe", weight: 100 }] } };
     for (const listener of messageListeners) {
       listener({ type: "FILL_FORM", config });
     }
@@ -134,7 +134,7 @@ describe("fillAllInputs — skipped input types", () => {
     const form = makeForm('<input type="password" name="password" />');
     const input = form.querySelector<HTMLInputElement>("input")!;
 
-    const config = { password: { enabled: true, probability: 100, customValues: ["s3cr3t!"] } };
+    const config = { password: { enabled: true, probability: 100, customValues: [{ value: "s3cr3t!", weight: 100 }] } };
     for (const listener of messageListeners) {
       listener({ type: "FILL_FORM", config });
     }
@@ -154,8 +154,8 @@ describe("fillAllInputs — skipped input types", () => {
     const hiddenInput = form.querySelector<HTMLInputElement>('[name="csrf"]')!;
 
     const config = {
-      email: { enabled: true, probability: 100, customValues: ["a@b.com"] },
-      firstName: { enabled: true, probability: 100, customValues: ["Alice"] },
+      email: { enabled: true, probability: 100, customValues: [{ value: "a@b.com", weight: 100 }] },
+      firstName: { enabled: true, probability: 100, customValues: [{ value: "Alice", weight: 100 }] },
     };
     for (const listener of messageListeners) {
       listener({ type: "FILL_FORM", config });
@@ -183,7 +183,7 @@ describe("fillAllInputs — select elements (REQ-7)", () => {
 
     // country fieldType should generate a country value that matches "United States" or "Canada"
     const config = {
-      country: { enabled: true, probability: 100, customValues: ["United States"] },
+      country: { enabled: true, probability: 100, customValues: [{ value: "United States", weight: 100 }] },
     };
     for (const listener of messageListeners) {
       listener({ type: "FILL_FORM", config });
@@ -203,7 +203,7 @@ describe("fillAllInputs — select elements (REQ-7)", () => {
     const select = form.querySelector<HTMLSelectElement>("select")!;
 
     const config = {
-      country: { enabled: true, probability: 100, customValues: ["ca"] },
+      country: { enabled: true, probability: 100, customValues: [{ value: "ca", weight: 100 }] },
     };
     for (const listener of messageListeners) {
       listener({ type: "FILL_FORM", config });
@@ -223,7 +223,7 @@ describe("fillAllInputs — select elements (REQ-7)", () => {
     const prevValue = select.value;
 
     const config = {
-      country: { enabled: true, probability: 100, customValues: ["United States"] },
+      country: { enabled: true, probability: 100, customValues: [{ value: "United States", weight: 100 }] },
     };
     for (const listener of messageListeners) {
       listener({ type: "FILL_FORM", config });
@@ -243,7 +243,7 @@ describe("fillAllInputs — select elements (REQ-7)", () => {
     const prevValue = select.value;
 
     const config = {
-      country: { enabled: true, probability: 100, customValues: ["United States"] },
+      country: { enabled: true, probability: 100, customValues: [{ value: "United States", weight: 100 }] },
     };
     for (const listener of messageListeners) {
       listener({ type: "FILL_FORM", config });
@@ -265,8 +265,8 @@ describe("fillAllInputs — select elements (REQ-7)", () => {
     const select = form.querySelector<HTMLSelectElement>("select")!;
 
     const config = {
-      email: { enabled: true, probability: 100, customValues: ["test@test.com"] },
-      country: { enabled: true, probability: 100, customValues: ["Canada"] },
+      email: { enabled: true, probability: 100, customValues: [{ value: "test@test.com", weight: 100 }] },
+      country: { enabled: true, probability: 100, customValues: [{ value: "Canada", weight: 100 }] },
     };
     for (const listener of messageListeners) {
       listener({ type: "FILL_FORM", config });
@@ -371,7 +371,7 @@ describe("getStoredFakerConfig — keyboard shortcut storage reads", () => {
     storageSyncGet.mockImplementation(() =>
       Promise.resolve({
         fakerConfig: {
-          email: { enabled: true, probability: 100, customValues: ["stored@example.com"] },
+          email: { enabled: true, probability: 100, customValues: [{ value: "stored@example.com", weight: 100 }] },
         },
       }),
     );
@@ -395,7 +395,7 @@ describe("getStoredFakerConfig — keyboard shortcut storage reads", () => {
     storageLocalGet.mockImplementation(() =>
       Promise.resolve({
         fakerConfig: {
-          firstName: { enabled: true, probability: 100, customValues: ["LocalName"] },
+          firstName: { enabled: true, probability: 100, customValues: [{ value: "LocalName", weight: 100 }] },
         },
       }),
     );
@@ -448,6 +448,57 @@ describe("getStoredFakerConfig — keyboard shortcut storage reads", () => {
     await new Promise((r) => setTimeout(r, 50));
 
     expect(input.value).toBe("");
+    cleanup(form);
+  });
+
+  it("migrates legacy string[] customValues from storage to CustomValueWeight[]", async () => {
+    // Simulate storage with OLD format (string[]) — as would happen if user
+    // has existing stored config from before TASK-001
+    storageSyncGet.mockImplementation(() =>
+      Promise.resolve({
+        fakerConfig: {
+          email: { enabled: true, probability: 100, customValues: ["migrated@example.com"] },
+        },
+      }),
+    );
+
+    const form = makeForm('<input name="email" type="email" />');
+    const input = form.querySelector<HTMLInputElement>("input")!;
+
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { altKey: true, shiftKey: true, key: "F", bubbles: true }),
+    );
+
+    // Wait for async storage read + migration + fill
+    await new Promise((r) => setTimeout(r, 50));
+
+    // The migration should convert ["migrated@example.com"] →
+    // [{ value: "migrated@example.com", weight: 100 }], then generateValue
+    // should pick it and fillInput should set the value
+    expect(input.value).toBe("migrated@example.com");
+    cleanup(form);
+  });
+
+  it("migrates legacy string[] customValues from local storage fallback", async () => {
+    storageSyncGet.mockImplementation(() => Promise.reject(new Error("sync fail")));
+    storageLocalGet.mockImplementation(() =>
+      Promise.resolve({
+        fakerConfig: {
+          text: { enabled: true, probability: 100, customValues: ["legacy text"] },
+        },
+      }),
+    );
+
+    const form = makeForm('<textarea name="notes"></textarea>');
+    const textarea = form.querySelector<HTMLTextAreaElement>("textarea")!;
+
+    document.dispatchEvent(
+      new KeyboardEvent("keydown", { altKey: true, shiftKey: true, key: "F", bubbles: true }),
+    );
+
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(textarea.value).toBe("legacy text");
     cleanup(form);
   });
 });
@@ -550,7 +601,7 @@ describe("fillSelect (via FILL_FORM message)", () => {
     const select = form.querySelector<HTMLSelectElement>("select")!;
 
     const config = {
-      email: { enabled: true, probability: 100, customValues: ["test@example.com"] },
+      email: { enabled: true, probability: 100, customValues: [{ value: "test@example.com", weight: 100 }] },
     };
     for (const listener of messageListeners) {
       listener({ type: "FILL_FORM", config });

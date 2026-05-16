@@ -1,25 +1,50 @@
 <script lang="ts">
   import type { FieldDef } from "../../lib/fields";
+  import type { CustomValueWeight } from "../../lib/fakerEngine";
 
   let {
     fields,
     customValues,
     onAddValue,
     onRemoveValue,
+    onUpdateWeight,
   }: {
     fields: FieldDef[];
-    customValues: Record<string, string[]>;
+    customValues: Record<string, CustomValueWeight[]>;
     onAddValue: (type: string, value: string) => void;
     onRemoveValue: (type: string, index: number) => void;
+    onUpdateWeight: (type: string, index: number, weight: number) => void;
   } = $props();
 
   const addInputs = $state<Record<string, string>>({});
+  const pendingWeights = $state<Record<string, string>>({});
 
   function submitAdd(type: string) {
     const val = (addInputs[type] ?? "").trim();
     if (!val) return;
     onAddValue(type, val);
     addInputs[type] = "";
+  }
+
+  function weightKey(type: string, index: number): string {
+    return `${type}::${index}`;
+  }
+
+  function onWeightInput(type: string, index: number, value: string) {
+    pendingWeights[weightKey(type, index)] = value;
+  }
+
+  function onWeightBlur(type: string, index: number, currentWeight: number) {
+    const key = weightKey(type, index);
+    const raw = pendingWeights[key];
+    if (raw === undefined) return;
+    const parsed = parseInt(raw, 10);
+    const clamped = isNaN(parsed) ? 100 : Math.max(0, Math.min(100, parsed));
+    // Only call if the raw input differs from the current weight
+    if (raw !== String(currentWeight)) {
+      onUpdateWeight(type, index, clamped);
+    }
+    delete pendingWeights[key];
   }
 </script>
 
@@ -41,7 +66,18 @@
             {#if values.length > 0}
               {#each values as value, i (i)}
                 <div class="value-chip">
-                  <span class="value-chip-text" title={value}>{value}</span>
+                  <span class="value-chip-text" title={value.value}>{value.value}</span>
+                  <input
+                    type="number"
+                    class="weight-input"
+                    min="0"
+                    max="100"
+                    value={pendingWeights[weightKey(field.type, i)] ?? value.weight}
+                    oninput={(e) =>
+                      onWeightInput(field.type, i, e.currentTarget?.value ?? "")}
+                    onblur={() => onWeightBlur(field.type, i, value.weight)}
+                    aria-label="Weight"
+                  />
                   <button
                     type="button"
                     class="value-chip-rm"
@@ -177,6 +213,31 @@
 
   .value-chip-rm:hover {
     color: var(--danger);
+  }
+
+  .weight-input {
+    width: 40px;
+    font-size: 10px;
+    font-family: "JetBrains Mono", monospace;
+    text-align: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    padding: 1px 2px;
+    outline: none;
+    transition: border-color 0.15s;
+    -moz-appearance: textfield;
+  }
+
+  .weight-input::-webkit-inner-spin-button,
+  .weight-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .weight-input:focus {
+    border-color: var(--accent2);
   }
 
   .faker-badge {

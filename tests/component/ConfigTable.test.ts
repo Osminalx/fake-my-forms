@@ -4,6 +4,7 @@ import { render, fireEvent, screen, within, cleanup } from "@testing-library/sve
 afterEach(cleanup);
 import ConfigTable from "../../src/entrypoints/popup/components/configTable.svelte";
 import { FIELDS } from "../../src/lib/fields";
+import type { CustomValueWeight } from "../../src/lib/fakerEngine";
 
 const sampleFields = FIELDS.slice(0, 3); // email, firstName, lastName
 
@@ -15,6 +16,7 @@ describe("ConfigTable component", () => {
         customValues: {},
         onAddValue: () => {},
         onRemoveValue: () => {},
+        onUpdateWeight: () => {},
       },
     });
 
@@ -30,6 +32,7 @@ describe("ConfigTable component", () => {
         customValues: {},
         onAddValue: () => {},
         onRemoveValue: () => {},
+        onUpdateWeight: () => {},
       },
     });
 
@@ -37,13 +40,19 @@ describe("ConfigTable component", () => {
     expect(badges.length).toBe(sampleFields.length);
   });
 
-  it("renders existing custom value chips", () => {
+  it("renders existing custom value chips with weight inputs", () => {
     render(ConfigTable, {
       props: {
         fields: sampleFields,
-        customValues: { email: ["foo@bar.com", "baz@qux.com"] },
+        customValues: {
+          email: [
+            { value: "foo@bar.com", weight: 100 },
+            { value: "baz@qux.com", weight: 50 },
+          ] as CustomValueWeight[],
+        },
         onAddValue: () => {},
         onRemoveValue: () => {},
+        onUpdateWeight: () => {},
       },
     });
 
@@ -55,9 +64,12 @@ describe("ConfigTable component", () => {
     render(ConfigTable, {
       props: {
         fields: [sampleFields[0]], // only email
-        customValues: { email: ["test@example.com"] },
+        customValues: {
+          email: [{ value: "test@example.com", weight: 100 }] as CustomValueWeight[],
+        },
         onAddValue: () => {},
         onRemoveValue: () => {},
+        onUpdateWeight: () => {},
       },
     });
 
@@ -72,6 +84,7 @@ describe("ConfigTable component", () => {
         customValues: {},
         onAddValue,
         onRemoveValue: () => {},
+        onUpdateWeight: () => {},
       },
     });
 
@@ -90,6 +103,7 @@ describe("ConfigTable component", () => {
         customValues: {},
         onAddValue,
         onRemoveValue: () => {},
+        onUpdateWeight: () => {},
       },
     });
 
@@ -108,6 +122,7 @@ describe("ConfigTable component", () => {
         customValues: {},
         onAddValue,
         onRemoveValue: () => {},
+        onUpdateWeight: () => {},
       },
     });
 
@@ -120,9 +135,12 @@ describe("ConfigTable component", () => {
     render(ConfigTable, {
       props: {
         fields: [sampleFields[0]],
-        customValues: { email: ["remove-me@test.com"] },
+        customValues: {
+          email: [{ value: "remove-me@test.com", weight: 100 }] as CustomValueWeight[],
+        },
         onAddValue: () => {},
         onRemoveValue,
+        onUpdateWeight: () => {},
       },
     });
 
@@ -136,13 +154,168 @@ describe("ConfigTable component", () => {
     render(ConfigTable, {
       props: {
         fields: [sampleFields[0]],
-        customValues: { email: ["a@a.com", "b@b.com", "c@c.com"] },
+        customValues: {
+          email: [
+            { value: "a@a.com", weight: 100 },
+            { value: "b@b.com", weight: 100 },
+            { value: "c@c.com", weight: 100 },
+          ] as CustomValueWeight[],
+        },
         onAddValue: () => {},
         onRemoveValue: () => {},
+        onUpdateWeight: () => {},
       },
     });
 
     const removeButtons = screen.getAllByRole("button", { name: "Remove" });
     expect(removeButtons.length).toBe(3);
+  });
+
+  // --- Weight input tests ---
+
+  it("renders a weight input for each custom value chip", () => {
+    render(ConfigTable, {
+      props: {
+        fields: [sampleFields[0]],
+        customValues: {
+          email: [
+            { value: "a@a.com", weight: 100 },
+            { value: "b@b.com", weight: 50 },
+          ] as CustomValueWeight[],
+        },
+        onAddValue: () => {},
+        onRemoveValue: () => {},
+        onUpdateWeight: () => {},
+      },
+    });
+
+    const weightInputs = screen.getAllByRole("spinbutton");
+    expect(weightInputs.length).toBe(2);
+  });
+
+  it("weight input shows correct default value (100)", () => {
+    render(ConfigTable, {
+      props: {
+        fields: [sampleFields[0]],
+        customValues: {
+          email: [
+            { value: "a@a.com", weight: 100 },
+            { value: "b@b.com", weight: 50 },
+          ] as CustomValueWeight[],
+        },
+        onAddValue: () => {},
+        onRemoveValue: () => {},
+        onUpdateWeight: () => {},
+      },
+    });
+
+    const weightInputs = screen.getAllByRole("spinbutton") as HTMLInputElement[];
+    expect(weightInputs[0].value).toBe("100");
+    expect(weightInputs[1].value).toBe("50");
+  });
+
+  it("calls onUpdateWeight with clamped weight on blur when value exceeds max (150 → 100)", async () => {
+    const onUpdateWeight = mock(() => {});
+    render(ConfigTable, {
+      props: {
+        fields: [sampleFields[0]],
+        customValues: {
+          email: [{ value: "test@test.com", weight: 100 }] as CustomValueWeight[],
+        },
+        onAddValue: () => {},
+        onRemoveValue: () => {},
+        onUpdateWeight,
+      },
+    });
+
+    const weightInput = screen.getByRole("spinbutton");
+    await fireEvent.input(weightInput, { target: { value: "150" } });
+    await fireEvent.blur(weightInput);
+
+    expect(onUpdateWeight).toHaveBeenCalledWith("email", 0, 100);
+  });
+
+  it("calls onUpdateWeight with clamped weight on blur when value is negative (-10 → 0)", async () => {
+    const onUpdateWeight = mock(() => {});
+    render(ConfigTable, {
+      props: {
+        fields: [sampleFields[0]],
+        customValues: {
+          email: [{ value: "test@test.com", weight: 100 }] as CustomValueWeight[],
+        },
+        onAddValue: () => {},
+        onRemoveValue: () => {},
+        onUpdateWeight,
+      },
+    });
+
+    const weightInput = screen.getByRole("spinbutton");
+    await fireEvent.input(weightInput, { target: { value: "-10" } });
+    await fireEvent.blur(weightInput);
+
+    expect(onUpdateWeight).toHaveBeenCalledWith("email", 0, 0);
+  });
+
+  it("does NOT call onUpdateWeight if weight unchanged on blur", async () => {
+    const onUpdateWeight = mock(() => {});
+    render(ConfigTable, {
+      props: {
+        fields: [sampleFields[0]],
+        customValues: {
+          email: [{ value: "test@test.com", weight: 100 }] as CustomValueWeight[],
+        },
+        onAddValue: () => {},
+        onRemoveValue: () => {},
+        onUpdateWeight,
+      },
+    });
+
+    const weightInput = screen.getByRole("spinbutton");
+    // Don't change the value, just blur
+    await fireEvent.blur(weightInput);
+
+    expect(onUpdateWeight).not.toHaveBeenCalled();
+  });
+
+  it("resets to 100 on blur when weight input is empty", async () => {
+    const onUpdateWeight = mock(() => {});
+    render(ConfigTable, {
+      props: {
+        fields: [sampleFields[0]],
+        customValues: {
+          email: [{ value: "test@test.com", weight: 80 }] as CustomValueWeight[],
+        },
+        onAddValue: () => {},
+        onRemoveValue: () => {},
+        onUpdateWeight,
+      },
+    });
+
+    const weightInput = screen.getByRole("spinbutton");
+    await fireEvent.input(weightInput, { target: { value: "" } });
+    await fireEvent.blur(weightInput);
+
+    expect(onUpdateWeight).toHaveBeenCalledWith("email", 0, 100);
+  });
+
+  it("resets to 100 on blur when weight input is non-numeric", async () => {
+    const onUpdateWeight = mock(() => {});
+    render(ConfigTable, {
+      props: {
+        fields: [sampleFields[0]],
+        customValues: {
+          email: [{ value: "test@test.com", weight: 80 }] as CustomValueWeight[],
+        },
+        onAddValue: () => {},
+        onRemoveValue: () => {},
+        onUpdateWeight,
+      },
+    });
+
+    const weightInput = screen.getByRole("spinbutton");
+    await fireEvent.input(weightInput, { target: { value: "abc" } });
+    await fireEvent.blur(weightInput);
+
+    expect(onUpdateWeight).toHaveBeenCalledWith("email", 0, 100);
   });
 });
