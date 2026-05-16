@@ -97,6 +97,46 @@ fake_my_forms/
 └── package.json
 ```
 
+## Adding a New Language
+
+The extension detects form field types (email, name, address, etc.) by matching label text against language-specific patterns. Currently supports **English** (default) and **Spanish**. To add support for another language:
+
+1. **Create the locale file** — `src/lib/locales/{lang}.ts`:
+
+```typescript
+import type { LocalePatterns } from "./index";
+
+const patterns: LocalePatterns = {
+  fieldPatterns: {
+    firstName: [/\bnombre\b/, /\bprimer\b/],
+    lastName: [/\bapellidos?\b/],
+    email: [/\bcorreo\b/],
+    // ... add only the patterns that differ from English
+  },
+  confirmPatterns: [/confirmar/i],
+};
+
+export default patterns;
+```
+
+2. **Register it** — add an export line in `src/lib/locales/index.ts`:
+
+```typescript
+import ja from "./ja";
+// ... inside the registry:
+"ja": ja,
+```
+
+3. **Add tests** — create `tests/unit/locales/{lang}.test.ts` verifying your patterns match correctly.
+
+4. **Run tests** to make sure nothing breaks:
+
+```bash
+bun test tests/unit
+```
+
+That's it. No changes needed to the core detection logic. The extension auto-detects the page language from `<html lang>` and falls back to English if a locale file is missing.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

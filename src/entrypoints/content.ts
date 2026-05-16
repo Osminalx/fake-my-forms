@@ -15,6 +15,7 @@ import {
 	type SelectElementType,
 } from "@/lib/fieldDetector";
 import { buildGroups, type SemanticField } from "@/lib/semanticGrouper";
+import { detectPageLocale, loadLocale } from "@/lib/locales";
 
 // Since the modern javascript frameworks detect changes through events
 // it's not as simple as just input.value = 'something'
@@ -489,6 +490,10 @@ export function countFillableInputs(): number {
 
 // Exported for testing purposes
 export function fillAllInputs(config: FakerConfig, locale?: string) {
+	// Cascade: explicit locale → detectPageLocale() → "en"
+	const resolvedLocale = locale ?? detectPageLocale();
+	const localePatterns = loadLocale(resolvedLocale);
+
 	// --- Radio / Checkbox pass ---
 	// Process these FIRST so that conditional fields (revealed by radio/checkbox selection)
 	// are visible when the main fill pass runs.
@@ -524,7 +529,7 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 		// Handle select elements (native)
 		if (el instanceof HTMLSelectElement) {
 			stats.totalSelects++;
-			const fieldType = detectSelectFieldType(el);
+			const fieldType = detectSelectFieldType(el, resolvedLocale);
 			fields.push({
 				id: el.id || `_fmf_${autoId++}`,
 				element: el,
@@ -540,7 +545,7 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 		if (elementType && elementType !== "native-select") {
 			stats.totalSelects++;
 			stats.frameworkDropdowns++;
-			const fieldType = detectSelectFieldType(el);
+			const fieldType = detectSelectFieldType(el, resolvedLocale);
 			console.debug("[fake-my-forms][discovery] framework dropdown", {
 				id: el.id,
 				tag: el.tagName,
@@ -573,7 +578,7 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 		if (el instanceof HTMLInputElement && el.type === "file") return;
 
 		const input = el as HTMLInputElement | HTMLTextAreaElement;
-		const fieldType = detectFieldType(input);
+		const fieldType = detectFieldType(input, resolvedLocale);
 		fields.push({
 			id: input.id || `_fmf_${autoId++}`,
 			element: input,
@@ -583,7 +588,7 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 		});
 	});
 
-	const groups = buildGroups(fields);
+	const groups = buildGroups(fields, localePatterns.confirmPatterns);
 	const locationContext = createLocationContext(locale);
 
 	console.debug(
@@ -866,7 +871,7 @@ export default defineContentScript({
 		document.addEventListener("keydown", async (e) => {
 			if (e.altKey && e.shiftKey && e.key === "F") {
 				const fakerConfig = await getStoredFakerConfig();
-				fillAllInputs(fakerConfig);
+				fillAllInputs(fakerConfig, detectPageLocale());
 			}
 		});
 	},
