@@ -138,7 +138,7 @@ export function validateSelectValue(
 	const search = value.toLowerCase().trim();
 
 	// Check if search matches any option (text or value for native selects)
-	let matched: string | undefined = undefined;
+	let matched: string | undefined;
 
 	if (element instanceof HTMLSelectElement) {
 		// For native selects, also check option.values

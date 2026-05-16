@@ -58,7 +58,7 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
   });
 
   it("detects email via Spanish keyword 'correo'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "tu correo" }))).toBe("email");
+    expect(detectFieldType(makeInput({ placeholder: "tu correo" }), "es")).toBe("email");
   });
 
   it("detects firstName via name='firstName'", () => {
@@ -66,7 +66,7 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
   });
 
   it("detects firstName via Spanish 'nombre'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "nombre" }))).toBe("firstName");
+    expect(detectFieldType(makeInput({ placeholder: "nombre" }), "es")).toBe("firstName");
   });
 
   it("detects firstName via 'fname'", () => {
@@ -78,7 +78,7 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
   });
 
   it("detects lastName via 'apellido'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "apellido" }))).toBe("lastName");
+    expect(detectFieldType(makeInput({ placeholder: "apellido" }), "es")).toBe("lastName");
   });
 
   it("detects lastName via 'lname'", () => {
@@ -108,7 +108,7 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
   });
 
   it("detects phone via 'telefono'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "telefono" }))).toBe("phone");
+    expect(detectFieldType(makeInput({ placeholder: "telefono" }), "es")).toBe("phone");
   });
 
   it("detects phone via 'mobile'", () => {
@@ -116,7 +116,7 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
   });
 
   it("detects phone via 'celular'", () => {
-    expect(detectFieldType(makeInput({ name: "celular" }))).toBe("phone");
+    expect(detectFieldType(makeInput({ name: "celular" }), "es")).toBe("phone");
   });
 
   it("detects address via name='address'", () => {
@@ -124,7 +124,7 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
   });
 
   it("detects address via 'dirección'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "dirección" }))).toBe("address");
+    expect(detectFieldType(makeInput({ placeholder: "dirección" }), "es")).toBe("address");
   });
 
   it("detects address via 'street'", () => {
@@ -136,7 +136,7 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
   });
 
   it("detects city via 'ciudad'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "ciudad" }))).toBe("city");
+    expect(detectFieldType(makeInput({ placeholder: "ciudad" }), "es")).toBe("city");
   });
 
   it("detects zipCode via name='zip'", () => {
@@ -152,7 +152,7 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
   });
 
   it("detects company via 'empresa'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "empresa" }))).toBe("company");
+    expect(detectFieldType(makeInput({ placeholder: "empresa" }), "es")).toBe("company");
   });
 
   it("detects company via 'organization'", () => {
@@ -164,7 +164,7 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
   });
 
   it("detects username via 'usuario'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "usuario" }))).toBe("username");
+    expect(detectFieldType(makeInput({ placeholder: "usuario" }), "es")).toBe("username");
   });
 
   it("detects password via name='password'", () => {
@@ -172,7 +172,7 @@ describe("detectFieldType — name/id/placeholder patterns", () => {
   });
 
   it("detects password via Spanish 'contraseña'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "contraseña" }))).toBe("password");
+    expect(detectFieldType(makeInput({ placeholder: "contraseña" }), "es")).toBe("password");
   });
 });
 
@@ -295,7 +295,7 @@ describe("detectFieldType — label associations", () => {
       `;
       return container.querySelector("input")!;
     });
-    expect(detectFieldType(input)).toBe("zipCode");
+    expect(detectFieldType(input, "es")).toBe("zipCode");
     cleanup();
   });
 
@@ -355,7 +355,7 @@ describe("detectFieldType — label associations", () => {
       `;
       return container.querySelector("input")!;
     });
-    expect(detectFieldType(input)).toBe("firstName");
+    expect(detectFieldType(input, "es")).toBe("firstName");
     cleanup();
   });
 
@@ -366,7 +366,7 @@ describe("detectFieldType — label associations", () => {
       `;
       return container.querySelector("input")!;
     });
-    expect(detectFieldType(input)).toBe("lastName");
+    expect(detectFieldType(input, "es")).toBe("lastName");
     cleanup();
   });
 
@@ -520,7 +520,7 @@ describe("detectFieldType — short labels (user's reported issue)", () => {
       `;
       return container.querySelector("input")!;
     });
-    expect(detectFieldType(input)).toBe("firstName");
+    expect(detectFieldType(input, "es")).toBe("firstName");
     cleanup();
   });
 
@@ -532,7 +532,7 @@ describe("detectFieldType — short labels (user's reported issue)", () => {
       `;
       return container.querySelector("input")!;
     });
-    expect(detectFieldType(input)).toBe("lastName");
+    expect(detectFieldType(input, "es")).toBe("lastName");
     cleanup();
   });
 
@@ -795,11 +795,11 @@ describe("detectFieldType — missing field type patterns", () => {
   });
 
   it("detects state via 'provincia'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "provincia" }))).toBe("state");
+    expect(detectFieldType(makeInput({ placeholder: "provincia" }), "es")).toBe("state");
   });
 
   it("detects state via 'estado'", () => {
-    expect(detectFieldType(makeInput({ name: "estado" }))).toBe("state");
+    expect(detectFieldType(makeInput({ name: "estado" }), "es")).toBe("state");
   });
 
   it("detects state via 'region'", () => {
@@ -812,11 +812,11 @@ describe("detectFieldType — missing field type patterns", () => {
   });
 
   it("detects country via 'pais'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "pais" }))).toBe("country");
+    expect(detectFieldType(makeInput({ placeholder: "pais" }), "es")).toBe("country");
   });
 
   it("detects country via 'nacionalidad'", () => {
-    expect(detectFieldType(makeInput({ id: "nacionalidad" }))).toBe("country");
+    expect(detectFieldType(makeInput({ id: "nacionalidad" }), "es")).toBe("country");
   });
 
   // date
@@ -825,7 +825,7 @@ describe("detectFieldType — missing field type patterns", () => {
   });
 
   it("detects date via 'fecha'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "fecha" }))).toBe("date");
+    expect(detectFieldType(makeInput({ placeholder: "fecha" }), "es")).toBe("date");
   });
 
   it("detects date via 'dob'", () => {
@@ -837,7 +837,7 @@ describe("detectFieldType — missing field type patterns", () => {
   });
 
   it("detects date via 'nacimiento'", () => {
-    expect(detectFieldType(makeInput({ placeholder: "nacimiento" }))).toBe("date");
+    expect(detectFieldType(makeInput({ placeholder: "nacimiento" }), "es")).toBe("date");
   });
 
   // number
@@ -850,11 +850,11 @@ describe("detectFieldType — missing field type patterns", () => {
   });
 
   it("detects age via 'edad' (Spanish word for age, matched by age pattern)", () => {
-    expect(detectFieldType(makeInput({ placeholder: "edad" }))).toBe("age");
+    expect(detectFieldType(makeInput({ placeholder: "edad" }), "es")).toBe("age");
   });
 
   it("detects number via 'monto'", () => {
-    expect(detectFieldType(makeInput({ id: "monto" }))).toBe("number");
+    expect(detectFieldType(makeInput({ id: "monto" }), "es")).toBe("number");
   });
 });
 
@@ -977,7 +977,7 @@ describe("detectSelectFieldType — signal hierarchy", () => {
 
   it("detects country via Spanish aria-label='País'", () => {
     const select = makeSelect({ ariaLabel: "País" });
-    expect(detectSelectFieldType(select)).toBe("country");
+    expect(detectSelectFieldType(select, "es")).toBe("country");
   });
 
   // Test 3: label[for] association
@@ -1005,7 +1005,7 @@ describe("detectSelectFieldType — signal hierarchy", () => {
       `;
       return container.querySelector("select")!;
     });
-    expect(detectSelectFieldType(select)).toBe("state");
+    expect(detectSelectFieldType(select, "es")).toBe("state");
     cleanup();
   });
 
@@ -1060,5 +1060,35 @@ describe("detectSelectFieldType — signal hierarchy", () => {
     });
     expect(detectSelectFieldType(select)).toBe("country");
     cleanup();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NEW: backward-compat — no locale param returns English-only results
+// ---------------------------------------------------------------------------
+describe("backward compatibility — no locale = English-only", () => {
+  it("English email keyword works without locale", () => {
+    expect(detectFieldType(makeInput({ name: "email" }))).toBe("email");
+  });
+
+  it("English firstName keyword works without locale", () => {
+    expect(detectFieldType(makeInput({ name: "firstName" }))).toBe("firstName");
+  });
+
+  it("Spanish 'correo' falls through to unknown without locale", () => {
+    expect(detectFieldType(makeInput({ placeholder: "correo" }))).toBe("unknown");
+  });
+
+  it("Spanish 'nombre' falls through to unknown without locale", () => {
+    expect(detectFieldType(makeInput({ placeholder: "nombre" }))).toBe("unknown");
+  });
+
+  it("Spanish 'apellido' falls through to unknown without locale", () => {
+    expect(detectFieldType(makeInput({ placeholder: "apellido" }))).toBe("unknown");
+  });
+
+  it("English confirm pattern works for detectSelectFieldType without locale", () => {
+    const select = makeSelect({ ariaLabel: "Country" });
+    expect(detectSelectFieldType(select)).toBe("country");
   });
 });

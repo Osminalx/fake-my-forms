@@ -24,9 +24,15 @@ export type SelectElementType =
 	| "vue-dropdown"
 	| "react-dropdown";
 
+import { loadLocale } from "./locales";
+import type { LocalePatterns } from "./locales";
+
+// Type extracted in case we could reutilize it or the getInputsOfType function
+type inputType = "radio" | "checkbox";
+
 export function getInputsOfType(
 	element: Element,
-	type: "radio" | "checkbox",
+	type: inputType,
 ): HTMLInputElement[] {
 	const children = element.querySelectorAll<HTMLInputElement>(
 		`input[type="${type}"]`,
@@ -37,7 +43,7 @@ export function getInputsOfType(
 
 export function findGroupContainer(
 	input: HTMLInputElement,
-	type: "radio" | "checkbox",
+	type: inputType,
 ): Element {
 	let currentElement = input.parentElement;
 
@@ -324,47 +330,8 @@ function getDataAttributeHint(
 	return "";
 }
 
-// RegExp patterns for matching in free text (labels, placeholders, etc.)
-// IMPORTANT: We use \b (word boundaries) to avoid false positives
-// Example: "Card Holders Full Name" should NOT match with "name" because "name" is not a complete word
-// But we allow some special cases like "fullName" that contains "lname"
-const FIELD_PATTERNS: Record<FieldType, RegExp> = {
-	// Specific cases first (so that "Name" -> firstName, not "name")
-	// We use boundaries to avoid substring matches in normal text
-	// But we allow "fullName" which is a common case
-	firstName:
-		/\b(first.?name|firstname|fname)\b|^(nombre)$|^(Nombre)$|^(Name)$|\bnombre\b|\bprimer\b/i,
-	lastName:
-		/\b(last.?name|lastname|lname|fullname)\b|^(apellido)$|^(Apellido)$|^(Lastname)$|^(Last Name)$|\bsurname\b|\bapellidos?\b/i,
-
-	// Generic name (after firstName/lastName to avoid collisions)
-	// \bname$ matches "Name" at the end (e.g: "Card Holder's Full Name")
-	// \bname\b matches any "name" as a complete word
-	// \bfull\s*name\b matches "full name" or "fullname"
-	name: /\bname$|\bname\b|\bfull\s*name\b/i,
-
-	// Rest of fields - all with word boundaries
-	// For zipCode we allow "zipCode" as a special case (data attributes)
-	email: /\bemail\b|\bcorreo\b/i,
-	phone:
-		/\bphone\b|\btel[eé]?fono?\b|\bmobile\b|\bcel(?:ular)?\b|\bwhatsapp\b/i,
-	address:
-		/\baddress\b|\bdirecci[oó]n\b|\bstreet\b|\bdomicilio\b|\bcalle\b|\bnum(?:ero)?\b|n[°º]/i,
-	city: /\bcity\b|\bciudad\b|\bpoblaci[oó]n\b|\bmunicipio\b/i,
-	state: /\bstate\b|\bprovincia\b|\bestado\b|\bregi[oó]n\b/i,
-	country: /\bcountry\b|\bpa[ií]s\b|\bnacionalidad\b/i,
-	zipCode:
-		/\b(zip|postal|cp|cep|pos(?:tal)?|c[oó]digo(?:postal)?)\b|zipcode\b/i,
-	company:
-		/\bcompany\b|\bempresa\b|\borganization\b|\borg(?:anizaci[oó]n)?\b|\bnegocio\b/i,
-	username: /\busername\b|\busuario\b|\blogin\b|\baccount\b/i,
-	password: /\bpass(?:word)?\b|\bcontrase[nñ]a\b|\bclave\b|\bpin\b/i,
-	date: /\bdate\b|\bfecha\b|\bdob\b|\bbirth(?:day)?\b|\bnacimiento\b/i,
-	age: /\bage\b|\bedad\b/i,
-	number: /\bnumber\b|\bcantidad\b|\bamount\b|\bcount\b|\bcant\b|\bmonto\b/i,
-	text: /.*/,
-	unknown: /.*/,
-};
+// FIELD_PATTERNS has been moved to src/lib/locales/ — now locale-aware.
+// Patterns are loaded via loadLocale(locale).fieldPatterns[type].
 
 // Verification order: first specific, then generic
 // This ensures that "Name" → firstName (not name), "Lastname" → lastName (not text)
@@ -399,7 +366,11 @@ const FIELD_TYPE_PRIORITY: FieldType[] = [
  */
 export function detectFieldType(
 	input: HTMLInputElement | HTMLTextAreaElement,
+	locale?: string,
 ): FieldType {
+	// Resolve locale patterns once for this detection call
+	const localePatterns = loadLocale(locale);
+
 	// 1. HIGH PRIORITY: Autocomplete token
 	const autocompleteType = parseAutocompleteValue(input);
 	if (autocompleteType) return autocompleteType;
@@ -407,7 +378,9 @@ export function detectFieldType(
 	// Helper function to check if a type matches using the correct priority
 	const matches = (type: FieldType, text: string): boolean => {
 		if (type === "text" || type === "unknown") return false;
-		return FIELD_PATTERNS[type].test(text);
+		const patterns = localePatterns.fieldPatterns[type];
+		if (!patterns || patterns.length === 0) return false;
+		return patterns.some((p) => p.test(text));
 	};
 
 	// 2. HIGH PRIORITY: aria-label (explicit)
@@ -473,11 +446,17 @@ export function detectFieldType(
  */
 export function detectSelectFieldType(
 	element: HTMLSelectElement | Element,
+	locale?: string,
 ): FieldType {
+	// Resolve locale patterns once for this detection call
+	const localePatterns = loadLocale(locale);
+
 	// Helper function to check if a type matches using the correct priority
 	const matches = (type: FieldType, text: string): boolean => {
 		if (type === "text" || type === "unknown") return false;
-		return FIELD_PATTERNS[type].test(text);
+		const patterns = localePatterns.fieldPatterns[type];
+		if (!patterns || patterns.length === 0) return false;
+		return patterns.some((p) => p.test(text));
 	};
 
 	// For native select elements, use the original logic path
