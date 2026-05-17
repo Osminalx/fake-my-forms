@@ -71,28 +71,37 @@
     }
   });
 
-   async function onFill() {
-     // Create a plain config object to avoid sending proxies which cause cloning errors
-     const config: FakerConfig = Object.fromEntries(
-       FIELDS.map((f) => [
-         f.type,
-         {
-           enabled: true,
-           probability: 100,
-           // Ensure customValues is a plain array, not a proxy
-           customValues: Array.isArray(customValues[f.type]) ? [...customValues[f.type]] : [],
-         },
-       ]),
-     );
-     console.log("config: ", config);
-     const [tab] = await browser.tabs.query({
-       active: true,
-       currentWindow: true,
-     });
-     if (tab?.id != null) {
-        await browser.tabs.sendMessage(tab.id, { type: "FILL_FORM", config, locale });
-     }
-   }
+  async function onFill() {
+    // Create a plain config object to avoid sending proxies which cause cloning errors
+    const config: FakerConfig = Object.fromEntries(
+      FIELDS.map((f) => [
+        f.type,
+        {
+          enabled: true,
+          probability: 100,
+          // Ensure customValues is a plain array with plain objects, not Svelte proxies
+          customValues: Array.isArray(customValues[f.type])
+            ? customValues[f.type].map((v) => ({
+                value: v.value,
+                weight: v.weight,
+              }))
+            : [],
+        },
+      ]),
+    );
+    console.log("config: ", config);
+    const [tab] = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (tab?.id != null) {
+      await browser.tabs.sendMessage(tab.id, {
+        type: "FILL_FORM",
+        config,
+        locale,
+      });
+    }
+  }
 </script>
 
 <div class="popup">
@@ -104,7 +113,13 @@
   </div>
   <Tabs {activeTab} {onTabChange} />
   {#if activeTab === "config"}
-    <ConfigTable fields={FIELDS} {customValues} {onAddValue} {onRemoveValue} {onUpdateWeight} />
+    <ConfigTable
+      fields={FIELDS}
+      {customValues}
+      {onAddValue}
+      {onRemoveValue}
+      {onUpdateWeight}
+    />
   {:else}
     <About />
   {/if}
