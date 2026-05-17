@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { FIELDS } from "../../lib/fields";
   import { browser } from "wxt/browser";
-  import { type FakerConfig } from "@/lib/fakerEngine";
+  import { type CustomValueWeight, type FakerConfig } from "@/lib/fakerEngine";
   import Header from "./components/header.svelte";
   import Stats from "./components/stats.svelte";
   import Locale from "./components/locale.svelte";
@@ -14,7 +14,7 @@
 
   type TabId = "config" | "about";
 
-  const customValues = $state<Record<string, string[]>>(
+  const customValues = $state<Record<string, CustomValueWeight[]>>(
     Object.fromEntries(FIELDS.map((f) => [f.type, []])),
   );
   let activeTab = $state<TabId>("config");
@@ -23,13 +23,22 @@
 
   function onAddValue(type: string, value: string) {
     if (!value.trim()) return;
-    customValues[type] = [...(customValues[type] ?? []), value.trim()];
+    customValues[type] = [
+      ...(customValues[type] ?? []),
+      { value: value.trim(), weight: 100 },
+    ];
   }
 
   function onRemoveValue(type: string, index: number) {
     const next = [...(customValues[type] ?? [])];
     next.splice(index, 1);
     customValues[type] = next;
+  }
+
+  function onUpdateWeight(type: string, index: number, weight: number) {
+    const arr = [...(customValues[type] ?? [])];
+    arr[index] = { ...arr[index], weight };
+    customValues[type] = arr;
   }
 
   function onClearAll() {
@@ -62,28 +71,37 @@
     }
   });
 
-   async function onFill() {
-     // Create a plain config object to avoid sending proxies which cause cloning errors
-     const config: FakerConfig = Object.fromEntries(
-       FIELDS.map((f) => [
-         f.type,
-         {
-           enabled: true,
-           probability: 100,
-           // Ensure customValues is a plain array, not a proxy
-           customValues: Array.isArray(customValues[f.type]) ? [...customValues[f.type]] : [],
-         },
-       ]),
-     );
-     console.log("config: ", config);
-     const [tab] = await browser.tabs.query({
-       active: true,
-       currentWindow: true,
-     });
-     if (tab?.id != null) {
-        await browser.tabs.sendMessage(tab.id, { type: "FILL_FORM", config, locale });
-     }
-   }
+  async function onFill() {
+    // Create a plain config object to avoid sending proxies which cause cloning errors
+    const config: FakerConfig = Object.fromEntries(
+      FIELDS.map((f) => [
+        f.type,
+        {
+          enabled: true,
+          probability: 100,
+          // Ensure customValues is a plain array with plain objects, not Svelte proxies
+          customValues: Array.isArray(customValues[f.type])
+            ? customValues[f.type].map((v) => ({
+                value: v.value,
+                weight: v.weight,
+              }))
+            : [],
+        },
+      ]),
+    );
+    console.log("config: ", config);
+    const [tab] = await browser.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (tab?.id != null) {
+      await browser.tabs.sendMessage(tab.id, {
+        type: "FILL_FORM",
+        config,
+        locale,
+      });
+    }
+  }
 </script>
 
 <div class="popup">
@@ -95,7 +113,13 @@
   </div>
   <Tabs {activeTab} {onTabChange} />
   {#if activeTab === "config"}
-    <ConfigTable fields={FIELDS} {customValues} {onAddValue} {onRemoveValue} />
+    <ConfigTable
+      fields={FIELDS}
+      {customValues}
+      {onAddValue}
+      {onRemoveValue}
+      {onUpdateWeight}
+    />
   {:else}
     <About />
   {/if}

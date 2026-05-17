@@ -3,6 +3,7 @@ import {
 	createLocationContext,
 	type FakerConfig,
 	generateValue,
+	migrateFieldConfig,
 	validateSelectValue,
 } from "@/lib/fakerEngine";
 import {
@@ -248,7 +249,21 @@ export function handleFrameworkDropdown(
 		control.click();
 
 		// Focus the inner input so React Select keeps the menu open
-		if (isInput) element.focus();
+		if (isInput) {
+			element.focus();
+
+			// Fallback: dispatch ArrowDown keydown to open the menu.
+			// Some React Select versions — or frameworks — don't respond reliably
+			// to a synthetic mousedown on the control. ArrowDown on the focused
+			// input triggers the built-in keyboard handler which calls openMenu().
+			element.dispatchEvent(
+				new KeyboardEvent("keydown", {
+					key: "ArrowDown",
+					bubbles: true,
+					cancelable: true,
+				}),
+			);
+		}
 
 		dbg("open dispatched", element.id);
 	} catch (e) {
@@ -286,6 +301,37 @@ export function handleFrameworkDropdown(
 		if (options.length === 0) {
 			if (attempt <= RETRY_DELAYS.length) {
 				dbg(`no options yet (attempt ${attempt}), retrying…`, element.id);
+
+				// If the menu still hasn't opened after first attempt, try ArrowDown
+				// + mousedown again — React Select may need a second interaction.
+				if (attempt >= 2) {
+					const retryControl =
+						element.closest<HTMLElement>(
+							'[class*="-control"], [class*="__control"]',
+						) ??
+						element.parentElement ??
+						element;
+
+					retryControl.dispatchEvent(
+						new MouseEvent("mousedown", {
+							bubbles: true,
+							cancelable: true,
+							button: 0,
+							composed: true,
+						}),
+					);
+					if (isInput) {
+						element.focus();
+						element.dispatchEvent(
+							new KeyboardEvent("keydown", {
+								key: "ArrowDown",
+								bubbles: true,
+								cancelable: true,
+							}),
+						);
+					}
+				}
+
 				setTimeout(
 					() => trySelectOption(attempt + 1),
 					RETRY_DELAYS[attempt - 1] ?? 700,
@@ -832,7 +878,7 @@ async function getStoredFakerConfig(): Promise<FakerConfig> {
 	try {
 		if (storage.sync) {
 			const { fakerConfig } = await storage.sync.get("fakerConfig");
-			return (fakerConfig ?? {}) as FakerConfig;
+			return migrateFieldConfig((fakerConfig ?? {}) as FakerConfig);
 		}
 	} catch (error) {
 		console.warn("[fake-my-forms] Failed reading sync storage:", error);
@@ -841,7 +887,7 @@ async function getStoredFakerConfig(): Promise<FakerConfig> {
 	try {
 		if (storage.local) {
 			const { fakerConfig } = await storage.local.get("fakerConfig");
-			return (fakerConfig ?? {}) as FakerConfig;
+			return migrateFieldConfig((fakerConfig ?? {}) as FakerConfig);
 		}
 	} catch (error) {
 		console.warn("[fake-my-forms] Failed reading local storage:", error);

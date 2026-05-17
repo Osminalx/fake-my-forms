@@ -257,9 +257,15 @@ export function getLabelText(
 		// Typical structure: div.field > label + input OR div.field > (label, input)
 
 		// Search for label as direct previous sibling (structure: div > label, input)
-		const prevLabel = parent.previousElementSibling;
-		if (prevLabel?.tagName === "LABEL") {
-			return prevLabel.textContent ?? "";
+		const prevSibling = parent.previousElementSibling;
+		if (prevSibling) {
+			if (prevSibling.tagName === "LABEL") {
+				return prevSibling.textContent ?? "";
+			}
+			// Search inside previous sibling for a label
+			// Common pattern: <div><label>Email</label></div><div><input /></div>
+			const labelInside = prevSibling.querySelector("label");
+			if (labelInside) return labelInside.textContent ?? "";
 		}
 
 		// Search for label as first child of the same parent (structure: div > (label, input))
@@ -555,11 +561,22 @@ export function detectSelectFieldType(
 			}
 		}
 
-		// 5. LOW PRIORITY: name, id on container
-		const signals = [
+		// 5. LOW PRIORITY: name, id on the element itself plus closest container
+		// For framework dropdowns like React Select, the outer wrapper often has a
+		// meaningful id (e.g. id="state", id="city") while the <input> has a generated
+		// id like "react-select-3-input". We also check the closest container's id.
+		const signalsBase = [
 			element.getAttribute("name"),
 			element.getAttribute("id"),
-		].join(" ");
+		];
+
+		const container = element.closest<HTMLElement>("[id]");
+		if (container && container !== element) {
+			const containerId = container.getAttribute("id");
+			if (containerId) signalsBase.push(containerId);
+		}
+
+		const signals = signalsBase.filter(Boolean).join(" ");
 
 		for (const type of FIELD_TYPE_PRIORITY) {
 			if (matches(type, signals)) return type;
