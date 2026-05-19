@@ -13,29 +13,36 @@
   }
 </script>
 
-<button
-  type="button"
-  class="fill-btn"
-  class:filling
-  onclick={handleClick}
-  disabled={filling}
->
-  {#if filling}
-    ✓ Filled!
-  {:else}
-    <span class="fill-btn-icon">⚡</span>
-    Fill All Inputs
-  {/if}
-</button>
+<div class="fill-bar">
+  <button
+    type="button"
+    class="fill-btn"
+    class:filling
+    onclick={handleClick}
+    disabled={filling}
+  >
+    {#if filling}
+      ✓ Filled!
+    {:else}
+      <span class="fill-btn-icon">⚡</span>
+      Fill All Inputs
+    {/if}
+  </button>
+</div>
 
 <style>
+  .fill-bar {
+    padding: 8px 16px 6px;
+    background: var(--bg);
+  }
+
   .fill-btn {
     width: 100%;
     padding: 12px;
     background: var(--accent);
     color: #000;
     border: none;
-    border-radius: 10px;
+    border-radius: var(--radius-md);
     font-family: "Syne", sans-serif;
     font-weight: 800;
     font-size: 14px;

@@ -1,12 +1,20 @@
 import { describe, it, expect, mock, afterEach } from "bun:test";
-import { render, fireEvent, screen, within, cleanup } from "@testing-library/svelte";
+import { render, fireEvent, screen, cleanup, within } from "@testing-library/svelte";
 
 afterEach(cleanup);
 import ConfigTable from "../../src/entrypoints/popup/components/configTable.svelte";
 import { FIELDS } from "../../src/lib/fields";
 import type { CustomValueWeight } from "../../src/lib/fakerEngine";
+import type { FieldGroup } from "../../src/lib/types";
 
 const sampleFields = FIELDS.slice(0, 3); // email, firstName, lastName
+
+const defaultCollapsed: Record<FieldGroup, boolean> = {
+  personal: false,
+  contact: false,
+  location: false,
+  account: false,
+};
 
 describe("ConfigTable component", () => {
   it("renders a row for each field", () => {
@@ -14,6 +22,8 @@ describe("ConfigTable component", () => {
       props: {
         fields: sampleFields,
         customValues: {},
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight: () => {},
@@ -30,6 +40,8 @@ describe("ConfigTable component", () => {
       props: {
         fields: sampleFields,
         customValues: {},
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight: () => {},
@@ -50,6 +62,8 @@ describe("ConfigTable component", () => {
             { value: "baz@qux.com", weight: 50 },
           ] as CustomValueWeight[],
         },
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight: () => {},
@@ -63,10 +77,12 @@ describe("ConfigTable component", () => {
   it("hides 'auto (faker)' badge for a field that has custom values", () => {
     render(ConfigTable, {
       props: {
-        fields: [sampleFields[0]], // only email
+        fields: [sampleFields[0]],  // only email
         customValues: {
           email: [{ value: "test@example.com", weight: 100 }] as CustomValueWeight[],
         },
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight: () => {},
@@ -82,6 +98,8 @@ describe("ConfigTable component", () => {
       props: {
         fields: [sampleFields[0]],
         customValues: {},
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue,
         onRemoveValue: () => {},
         onUpdateWeight: () => {},
@@ -101,6 +119,8 @@ describe("ConfigTable component", () => {
       props: {
         fields: [sampleFields[0]],
         customValues: {},
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue,
         onRemoveValue: () => {},
         onUpdateWeight: () => {},
@@ -120,6 +140,8 @@ describe("ConfigTable component", () => {
       props: {
         fields: [sampleFields[0]],
         customValues: {},
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue,
         onRemoveValue: () => {},
         onUpdateWeight: () => {},
@@ -138,6 +160,8 @@ describe("ConfigTable component", () => {
         customValues: {
           email: [{ value: "remove-me@test.com", weight: 100 }] as CustomValueWeight[],
         },
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue,
         onUpdateWeight: () => {},
@@ -161,6 +185,8 @@ describe("ConfigTable component", () => {
             { value: "c@c.com", weight: 100 },
           ] as CustomValueWeight[],
         },
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight: () => {},
@@ -183,6 +209,8 @@ describe("ConfigTable component", () => {
             { value: "b@b.com", weight: 50 },
           ] as CustomValueWeight[],
         },
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight: () => {},
@@ -203,6 +231,8 @@ describe("ConfigTable component", () => {
             { value: "b@b.com", weight: 50 },
           ] as CustomValueWeight[],
         },
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight: () => {},
@@ -222,6 +252,8 @@ describe("ConfigTable component", () => {
         customValues: {
           email: [{ value: "test@test.com", weight: 100 }] as CustomValueWeight[],
         },
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight,
@@ -243,6 +275,8 @@ describe("ConfigTable component", () => {
         customValues: {
           email: [{ value: "test@test.com", weight: 100 }] as CustomValueWeight[],
         },
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight,
@@ -264,6 +298,8 @@ describe("ConfigTable component", () => {
         customValues: {
           email: [{ value: "test@test.com", weight: 100 }] as CustomValueWeight[],
         },
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight,
@@ -271,7 +307,6 @@ describe("ConfigTable component", () => {
     });
 
     const weightInput = screen.getByRole("spinbutton");
-    // Don't change the value, just blur
     await fireEvent.blur(weightInput);
 
     expect(onUpdateWeight).not.toHaveBeenCalled();
@@ -285,6 +320,8 @@ describe("ConfigTable component", () => {
         customValues: {
           email: [{ value: "test@test.com", weight: 80 }] as CustomValueWeight[],
         },
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight,
@@ -306,6 +343,8 @@ describe("ConfigTable component", () => {
         customValues: {
           email: [{ value: "test@test.com", weight: 80 }] as CustomValueWeight[],
         },
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
         onAddValue: () => {},
         onRemoveValue: () => {},
         onUpdateWeight,
@@ -317,5 +356,92 @@ describe("ConfigTable component", () => {
     await fireEvent.blur(weightInput);
 
     expect(onUpdateWeight).toHaveBeenCalledWith("email", 0, 100);
+  });
+
+  // --- Grouped rendering tests ---
+
+  it("renders group headings (Personal, Contact, etc.)", () => {
+    render(ConfigTable, {
+      props: {
+        fields: FIELDS,
+        customValues: {},
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
+        onAddValue: () => {},
+        onRemoveValue: () => {},
+        onUpdateWeight: () => {},
+      },
+    });
+
+    expect(screen.getByText("Personal")).toBeInTheDocument();
+    expect(screen.getByText("Contact")).toBeInTheDocument();
+    expect(screen.getByText("Location")).toBeInTheDocument();
+    expect(screen.getByText("Account")).toBeInTheDocument();
+  });
+
+  it("hides fields when their group is collapsed", () => {
+    const collapsed: Record<FieldGroup, boolean> = {
+      personal: false,
+      contact: true,
+      location: false,
+      account: false,
+    };
+
+    render(ConfigTable, {
+      props: {
+        fields: FIELDS,
+        customValues: {},
+        collapsedGroups: collapsed,
+        onToggleGroup: () => {},
+        onAddValue: () => {},
+        onRemoveValue: () => {},
+        onUpdateWeight: () => {},
+      },
+    });
+
+    // email is in the Contact group which is collapsed
+    expect(screen.queryByText("email")).not.toBeInTheDocument();
+    // firstName is in Personal which is not collapsed
+    expect(screen.getByText("firstName")).toBeInTheDocument();
+  });
+
+  it("renders groups in FIELD_GROUP_ORDER order", () => {
+    render(ConfigTable, {
+      props: {
+        fields: FIELDS,
+        customValues: {},
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup: () => {},
+        onAddValue: () => {},
+        onRemoveValue: () => {},
+        onUpdateWeight: () => {},
+      },
+    });
+
+    // Get all section headers in DOM order
+    const sectionTitles = screen.getAllByText(/Personal|Contact|Location|Account/);
+    expect(sectionTitles[0]).toHaveTextContent("Personal");
+    expect(sectionTitles[1]).toHaveTextContent("Contact");
+    expect(sectionTitles[2]).toHaveTextContent("Location");
+    expect(sectionTitles[3]).toHaveTextContent("Account");
+  });
+
+  it("calls onToggleGroup when clicking a group header", async () => {
+    const onToggleGroup = mock((_g: FieldGroup) => {});
+    render(ConfigTable, {
+      props: {
+        fields: FIELDS,
+        customValues: {},
+        collapsedGroups: defaultCollapsed,
+        onToggleGroup,
+        onAddValue: () => {},
+        onRemoveValue: () => {},
+        onUpdateWeight: () => {},
+      },
+    });
+
+    await fireEvent.click(screen.getByText("Personal"));
+
+    expect(onToggleGroup).toHaveBeenCalledWith("personal");
   });
 });

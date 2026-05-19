@@ -3,16 +3,22 @@
   import { FIELDS } from "../../lib/fields";
   import { browser } from "wxt/browser";
   import { type CustomValueWeight, type FakerConfig } from "@/lib/fakerEngine";
+  import type { TabId, FieldGroup } from "../../lib/types";
+  import type { TabDef } from "../../lib/types";
   import Header from "./components/header.svelte";
-  import Stats from "./components/stats.svelte";
-  import Locale from "./components/locale.svelte";
   import FillButton from "./components/fillButton.svelte";
-  import Tabs from "./components/tabs.svelte";
   import ConfigTable from "./components/configTable.svelte";
-  import About from "./components/about.svelte";
+  import SettingsMenu from "./components/settingsMenu.svelte";
+  import AboutModal from "./components/aboutModal.svelte";
+  import BottomNav from "./components/bottomNav.svelte";
   import Footer from "./components/footer.svelte";
 
-  type TabId = "config" | "about";
+  const TABS: TabDef[] = [
+    { id: "config", icon: "📋", label: "Config" },
+    { id: "preview", icon: "👁", label: "Preview" },
+    { id: "per-fill", icon: "✏️", label: "Per-Fill" },
+    { id: "settings", icon: "⚙️", label: "Settings" },
+  ];
 
   const customValues = $state<Record<string, CustomValueWeight[]>>(
     Object.fromEntries(FIELDS.map((f) => [f.type, []])),
@@ -20,6 +26,14 @@
   let activeTab = $state<TabId>("config");
   let locale = $state("es");
   let inputCount = $state(0);
+  let showAbout = $state(false);
+
+  const collapsedGroups = $state<Record<FieldGroup, boolean>>({
+    personal: false,
+    contact: false,
+    location: false,
+    account: false,
+  });
 
   function onAddValue(type: string, value: string) {
     if (!value.trim()) return;
@@ -51,6 +65,10 @@
     activeTab = tab;
   }
 
+  function onToggleGroup(group: FieldGroup) {
+    collapsedGroups[group] = !collapsedGroups[group];
+  }
+
   onMount(async () => {
     try {
       const [tab] = await browser.tabs.query({
@@ -72,14 +90,12 @@
   });
 
   async function onFill() {
-    // Create a plain config object to avoid sending proxies which cause cloning errors
     const config: FakerConfig = Object.fromEntries(
       FIELDS.map((f) => [
         f.type,
         {
           enabled: true,
           probability: 100,
-          // Ensure customValues is a plain array with plain objects, not Svelte proxies
           customValues: Array.isArray(customValues[f.type])
             ? customValues[f.type].map((v) => ({
                 value: v.value,
@@ -105,25 +121,45 @@
 </script>
 
 <div class="popup">
-  <Header />
-  <Stats count={inputCount} />
-  <Locale bind:locale />
-  <div class="fill-btn-wrap">
+  <Header {inputCount} onAboutClick={() => (showAbout = true)} />
+
+  <div class="main-content">
+    {#if activeTab === "config"}
+      <ConfigTable
+        fields={FIELDS}
+        {customValues}
+        {collapsedGroups}
+        {onToggleGroup}
+        {onAddValue}
+        {onRemoveValue}
+        {onUpdateWeight}
+      />
+    {:else if activeTab === "preview"}
+      <div class="placeholder-view">
+        <div class="placeholder-icon">👁</div>
+        <p class="placeholder-title">Preview</p>
+        <p class="placeholder-desc">See how your forms will look before filling. Coming soon!</p>
+      </div>
+    {:else if activeTab === "per-fill"}
+      <div class="placeholder-view">
+        <div class="placeholder-icon">✏️</div>
+        <p class="placeholder-title">Per-Fill</p>
+        <p class="placeholder-desc">Configure field-by-field fill behavior. Coming soon!</p>
+      </div>
+    {:else if activeTab === "settings"}
+      <SettingsMenu bind:locale onAboutClick={() => (showAbout = true)} />
+    {/if}
+  </div>
+
+  <div class="sticky-fill-wrap">
     <FillButton {onFill} />
   </div>
-  <Tabs {activeTab} {onTabChange} />
-  {#if activeTab === "config"}
-    <ConfigTable
-      fields={FIELDS}
-      {customValues}
-      {onAddValue}
-      {onRemoveValue}
-      {onUpdateWeight}
-    />
-  {:else}
-    <About />
-  {/if}
+
+  <BottomNav tabs={TABS} {activeTab} {onTabChange} />
+
   <Footer {onClearAll} />
+
+  <AboutModal show={showAbout} onClose={() => (showAbout = false)} />
 </div>
 
 <style>
@@ -136,9 +172,54 @@
     box-shadow:
       0 24px 80px #00000080,
       0 0 0 1px #ffffff08;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    max-height: 600px;
   }
 
-  .fill-btn-wrap {
-    padding: 14px 18px 10px;
+  .main-content {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .sticky-fill-wrap {
+    position: sticky;
+    bottom: var(--nav-height);
+    z-index: var(--z-sticky);
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+  }
+
+  .placeholder-view {
+    padding: 40px 18px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .placeholder-icon {
+    font-size: 32px;
+    opacity: 0.4;
+    margin-bottom: 4px;
+  }
+
+  .placeholder-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--text);
+    margin: 0;
+  }
+
+  .placeholder-desc {
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin: 0;
+    max-width: 240px;
   }
 </style>

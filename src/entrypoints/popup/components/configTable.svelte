@@ -1,16 +1,23 @@
 <script lang="ts">
-  import type { FieldDef } from "../../lib/fields";
-  import type { CustomValueWeight } from "../../lib/fakerEngine";
+  import type { FieldDef } from "@/lib/fields";
+  import type { CustomValueWeight } from "@/lib/fakerEngine";
+  import type { FieldGroup } from "@/lib/types";
+  import { FIELD_GROUP_META, FIELD_GROUP_ORDER } from "@/lib/types";
+  import CollapsibleSection from "./collapsibleSection.svelte";
 
   let {
     fields,
     customValues,
+    collapsedGroups,
+    onToggleGroup,
     onAddValue,
     onRemoveValue,
     onUpdateWeight,
   }: {
     fields: FieldDef[];
     customValues: Record<string, CustomValueWeight[]>;
+    collapsedGroups: Record<FieldGroup, boolean>;
+    onToggleGroup: (group: FieldGroup) => void;
     onAddValue: (type: string, value: string) => void;
     onRemoveValue: (type: string, index: number) => void;
     onUpdateWeight: (type: string, index: number, weight: number) => void;
@@ -18,6 +25,19 @@
 
   const addInputs = $state<Record<string, string>>({});
   const pendingWeights = $state<Record<string, string>>({});
+
+  /** Group fields by their group property. */
+  function groupFields(): Map<FieldGroup, FieldDef[]> {
+    const map = new Map<FieldGroup, FieldDef[]>();
+    for (const g of FIELD_GROUP_ORDER) {
+      map.set(g, []);
+    }
+    for (const f of fields) {
+      const arr = map.get(f.group);
+      if (arr) arr.push(f);
+    }
+    return map;
+  }
 
   function submitAdd(type: string) {
     const val = (addInputs[type] ?? "").trim();
@@ -40,12 +60,13 @@
     if (raw === undefined) return;
     const parsed = parseInt(raw, 10);
     const clamped = isNaN(parsed) ? 100 : Math.max(0, Math.min(100, parsed));
-    // Only call if the raw input differs from the current weight
     if (raw !== String(currentWeight)) {
       onUpdateWeight(type, index, clamped);
     }
     delete pendingWeights[key];
   }
+
+  const grouped = $derived(groupFields());
 </script>
 
 <div class="tab-config">
@@ -54,63 +75,76 @@
     <div>VALUE</div>
   </div>
   <div class="config-wrap">
-    {#each fields as field (field.type)}
-      {@const values = customValues[field.type] ?? []}
-      <div class="field-row">
-        <div class="field-type">
-          <span class="field-icon">{field.icon}</span>
-          <span class="field-name">{field.label}</span>
-        </div>
-        <div>
-          <div class="field-values">
-            {#if values.length > 0}
-              {#each values as value, i (i)}
-                <div class="value-chip">
-                  <span class="value-chip-text" title={value.value}>{value.value}</span>
+    {#each FIELD_GROUP_ORDER as group (group)}
+      {@const groupFields = grouped.get(group) ?? []}
+      {#if groupFields.length > 0}
+        {@const meta = FIELD_GROUP_META[group]}
+        <CollapsibleSection
+          title={meta.label}
+          icon={meta.icon}
+          collapsed={collapsedGroups[group]}
+          onToggle={() => onToggleGroup(group)}
+        >
+          {#each groupFields as field (field.type)}
+            {@const values = customValues[field.type] ?? []}
+            <div class="field-row">
+              <div class="field-type">
+                <span class="field-icon">{field.icon}</span>
+                <span class="field-name">{field.label}</span>
+              </div>
+              <div>
+                <div class="field-values">
+                  {#if values.length > 0}
+                    {#each values as value, i (i)}
+                      <div class="value-chip">
+                        <span class="value-chip-text" title={value.value}>{value.value}</span>
+                        <input
+                          type="number"
+                          class="weight-input"
+                          min="0"
+                          max="100"
+                          value={pendingWeights[weightKey(field.type, i)] ?? value.weight}
+                          oninput={(e) =>
+                            onWeightInput(field.type, i, e.currentTarget?.value ?? "")}
+                          onblur={() => onWeightBlur(field.type, i, value.weight)}
+                          aria-label="Weight"
+                        />
+                        <button
+                          type="button"
+                          class="value-chip-rm"
+                          onclick={() => onRemoveValue(field.type, i)}
+                          aria-label="Remove"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    {/each}
+                  {:else}
+                    <span class="faker-badge">auto (faker)</span>
+                  {/if}
+                </div>
+                <div class="add-value-row">
                   <input
-                    type="number"
-                    class="weight-input"
-                    min="0"
-                    max="100"
-                    value={pendingWeights[weightKey(field.type, i)] ?? value.weight}
-                    oninput={(e) =>
-                      onWeightInput(field.type, i, e.currentTarget?.value ?? "")}
-                    onblur={() => onWeightBlur(field.type, i, value.weight)}
-                    aria-label="Weight"
+                    class="add-input"
+                    placeholder="add custom value…"
+                    value={addInputs[field.type] ?? ""}
+                    oninput={(e) => (addInputs[field.type] = e.currentTarget?.value ?? "")}
+                    onkeydown={(e) => e.key === "Enter" && submitAdd(field.type)}
                   />
                   <button
                     type="button"
-                    class="value-chip-rm"
-                    onclick={() => onRemoveValue(field.type, i)}
-                    aria-label="Remove"
+                    class="add-btn"
+                    onclick={() => submitAdd(field.type)}
+                    aria-label="Add value"
                   >
-                    ✕
+                    +
                   </button>
                 </div>
-              {/each}
-            {:else}
-              <span class="faker-badge">auto (faker)</span>
-            {/if}
-          </div>
-          <div class="add-value-row">
-            <input
-              class="add-input"
-              placeholder="add custom value…"
-              value={addInputs[field.type] ?? ""}
-              oninput={(e) => (addInputs[field.type] = e.currentTarget?.value ?? "")}
-              onkeydown={(e) => e.key === "Enter" && submitAdd(field.type)}
-            />
-            <button
-              type="button"
-              class="add-btn"
-              onclick={() => submitAdd(field.type)}
-              aria-label="Add value"
-            >
-              +
-            </button>
-          </div>
-        </div>
-      </div>
+              </div>
+            </div>
+          {/each}
+        </CollapsibleSection>
+      {/if}
     {/each}
   </div>
 </div>
@@ -132,7 +166,7 @@
     background: var(--surface);
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: var(--z-sticky);
   }
 
   .config-wrap {
@@ -146,7 +180,7 @@
     display: grid;
     grid-template-columns: 110px 1fr;
     align-items: start;
-    padding: 10px 18px;
+    padding: 8px 18px;
     border-bottom: 1px solid #ffffff06;
     gap: 10px;
     transition: background 0.1s;
@@ -154,6 +188,10 @@
 
   .field-row:hover {
     background: var(--surface2);
+  }
+
+  .field-row:last-child {
+    border-bottom: none;
   }
 
   .field-type {
@@ -182,7 +220,7 @@
   .value-chip {
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     padding: 2px 6px;
     font-size: 10px;
     color: var(--text);
@@ -257,7 +295,7 @@
     flex: 1;
     background: var(--surface2);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: var(--text);
     font-family: "JetBrains Mono", monospace;
     font-size: 10px;
@@ -278,7 +316,7 @@
   .add-btn {
     background: var(--accent2);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     color: #fff;
     font-size: 13px;
     width: 22px;
