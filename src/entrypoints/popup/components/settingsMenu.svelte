@@ -66,7 +66,8 @@
   <section class="settings-section">
     <h2 class="section-heading">About</h2>
     <p class="about-summary">
-      FakeIt v0.1.0 — automatically fills form inputs with realistic fake data.
+      Fake my Forms v0.1.0 — automatically fills form inputs with realistic fake
+      data.
     </p>
     <button type="button" class="about-btn" onclick={onAboutClick}>
       View details →

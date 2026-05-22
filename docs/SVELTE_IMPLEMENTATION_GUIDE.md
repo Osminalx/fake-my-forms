@@ -1,6 +1,6 @@
 # Svelte implementation guide (for React developers)
 
-This guide explains how the FakeIt popup logic was ported from vanilla HTML/JS to Svelte, and maps Svelte concepts to what you already know from React.
+This guide explains how the Fake my Forms popup logic was ported from vanilla HTML/JS to Svelte, and maps Svelte concepts to what you already know from React.
 
 ---
 
@@ -8,8 +8,8 @@ This guide explains how the FakeIt popup logic was ported from vanilla HTML/JS t
 
 ### Reactive state
 
-| React | Svelte 5 |
-|-------|----------|
+| React                                   | Svelte 5                |
+| --------------------------------------- | ----------------------- |
 | `const [count, setCount] = useState(0)` | `let count = $state(0)` |
 
 In React you call a setter to update state; in Svelte you assign to the variable. Assignment triggers reactivity. Svelte then updates only the DOM that depends on that state (fine-grained), whereas React re-renders the component.
@@ -30,8 +30,8 @@ In React you call a setter to update state; in Svelte you assign to the variable
 
 ### Derived values
 
-| React | Svelte 5 |
-|-------|----------|
+| React                                               | Svelte 5                              |
+| --------------------------------------------------- | ------------------------------------- |
 | `const doubled = useMemo(() => count * 2, [count])` | `const doubled = $derived(count * 2)` |
 
 `$derived` recomputes when its dependencies change. No dependency array—Svelte tracks reads automatically.
@@ -42,8 +42,8 @@ In React you call a setter to update state; in Svelte you assign to the variable
 
 ### Side effects
 
-| React | Svelte 5 |
-|-------|----------|
+| React                              | Svelte 5                 |
+| ---------------------------------- | ------------------------ |
 | `useEffect(() => { ... }, [deps])` | `$effect(() => { ... })` |
 
 Svelte runs the callback when reactive dependencies used inside it change. Cleanup is done by returning a function from the callback.
@@ -54,8 +54,8 @@ Svelte runs the callback when reactive dependencies used inside it change. Clean
 
 ### Props
 
-| React | Svelte 5 |
-|-------|----------|
+| React                                      | Svelte 5                           |
+| ------------------------------------------ | ---------------------------------- |
 | `function Child({ name, onSave }) { ... }` | `let { name, onSave } = $props();` |
 
 You declare each prop; no single `props` object. Optional props can have defaults: `let { name = 'guest' } = $props();`.
@@ -66,8 +66,8 @@ You declare each prop; no single `props` object. Optional props can have default
 
 ### Events
 
-| React | Svelte 5 | Svelte 4 |
-|-------|----------|----------|
+| React                   | Svelte 5                | Svelte 4                 |
+| ----------------------- | ----------------------- | ------------------------ |
 | `onClick={handleClick}` | `onclick={handleClick}` | `on:click={handleClick}` |
 
 Use lowercase `onclick` in Svelte 5 (DOM-style). Passing a callback to the parent works the same as in React: parent passes a function as a prop, child calls it (e.g. `onClearAll()`).
@@ -76,8 +76,8 @@ Use lowercase `onclick` in Svelte 5 (DOM-style). Passing a callback to the paren
 
 ### Conditionals
 
-| React | Svelte |
-|-------|--------|
+| React                               | Svelte                                  |
+| ----------------------------------- | --------------------------------------- |
 | `{ condition && <X /> }` or ternary | `{#if condition}<X />{:else}<Y />{/if}` |
 
 ```svelte
@@ -92,8 +92,8 @@ Use lowercase `onclick` in Svelte 5 (DOM-style). Passing a callback to the paren
 
 ### Lists
 
-| React | Svelte |
-|-------|--------|
+| React                                            | Svelte                                               |
+| ------------------------------------------------ | ---------------------------------------------------- |
 | `{ items.map(x => <Item key={x.id} {...x} />) }` | `{#each items as item (item.id)}<Item ... />{/each}` |
 
 The `(item.id)` is the key—like React’s `key`. You can also use index: `{#each items as item, i (i)}`.
@@ -108,8 +108,8 @@ The `(item.id)` is the key—like React’s `key`. You can also use index: `{#ea
 
 ### Two-way binding
 
-| React | Svelte |
-|-------|--------|
+| React                                            | Svelte                     |
+| ------------------------------------------------ | -------------------------- |
 | `value={x} onChange={e => setX(e.target.value)}` | `bind:value={x}` on inputs |
 
 For custom components, the child can expose a bindable prop with `$bindable()` so the parent can use `bind:value={locale}`.
@@ -127,16 +127,16 @@ let { locale = $bindable('es') } = $props();
 
 ## What each component does (and how it maps from the vanilla example)
 
-| Component | Role | Vanilla equivalent |
-|-----------|------|--------------------|
-| **App.svelte** | Holds all popup state (`customValues`, `activeTab`, `locale`, `inputCount`). Passes data and callbacks down. | The global `state` object + tab/locale; replaces the need for a single `renderFields()` by passing state and callbacks. |
-| **configTable.svelte** | Renders the list of field types and their custom values (chips). Handles add value (input + button or Enter) and remove chip. | Replaces `renderFields()` and the event listeners on `.value-chip-rm`, `.add-btn`, `.add-input`. |
-| **tabs.svelte** | Renders the tab strip (Custom Values / About) and sets active tab via callback. | Replaces the vanilla tab click handlers and `style.display` toggling (panel visibility is handled in App with `{#if}`). |
-| **fillButton.svelte** | Calls `onFill` and shows “✓ Filled!” with a short flash animation, then resets. | Replaces the vanilla fillBtn click handler. |
-| **footer.svelte** | “Clear all” button that calls `onClearAll` from App. | Replaces the vanilla clearBtn handler. |
-| **locale.svelte** | Select for faker locale; binds to App’s `locale` via `$bindable()`. | Replaces `#localeSelect`. |
-| **stats.svelte** | Displays “X fields” from App (e.g. from content script later). | Replaces `#inputCount`. |
-| **about.svelte** | Static About tab content. | The hidden `#tab-about` div content. |
+| Component              | Role                                                                                                                          | Vanilla equivalent                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **App.svelte**         | Holds all popup state (`customValues`, `activeTab`, `locale`, `inputCount`). Passes data and callbacks down.                  | The global `state` object + tab/locale; replaces the need for a single `renderFields()` by passing state and callbacks. |
+| **configTable.svelte** | Renders the list of field types and their custom values (chips). Handles add value (input + button or Enter) and remove chip. | Replaces `renderFields()` and the event listeners on `.value-chip-rm`, `.add-btn`, `.add-input`.                        |
+| **tabs.svelte**        | Renders the tab strip (Custom Values / About) and sets active tab via callback.                                               | Replaces the vanilla tab click handlers and `style.display` toggling (panel visibility is handled in App with `{#if}`). |
+| **fillButton.svelte**  | Calls `onFill` and shows “✓ Filled!” with a short flash animation, then resets.                                               | Replaces the vanilla fillBtn click handler.                                                                             |
+| **footer.svelte**      | “Clear all” button that calls `onClearAll` from App.                                                                          | Replaces the vanilla clearBtn handler.                                                                                  |
+| **locale.svelte**      | Select for faker locale; binds to App’s `locale` via `$bindable()`.                                                           | Replaces `#localeSelect`.                                                                                               |
+| **stats.svelte**       | Displays “X fields” from App (e.g. from content script later).                                                                | Replaces `#inputCount`.                                                                                                 |
+| **about.svelte**       | Static About tab content.                                                                                                     | The hidden `#tab-about` div content.                                                                                    |
 
 ---
 
