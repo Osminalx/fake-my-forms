@@ -562,6 +562,185 @@ describe("getStoredFakerConfig — keyboard shortcut storage reads", () => {
 });
 
 // ---------------------------------------------------------------------------
+// PREVIEW_FILL message handler
+// ---------------------------------------------------------------------------
+describe("PREVIEW_FILL message handler", () => {
+  function makeForm(html: string): HTMLFormElement {
+    const form = document.createElement("form");
+    form.innerHTML = html;
+    document.body.appendChild(form);
+    return form;
+  }
+
+  function cleanup(form: HTMLFormElement) {
+    document.body.removeChild(form);
+  }
+
+  it("returns entries for fillable fields on the page", async () => {
+    const form = makeForm(`
+      <input id="email" name="email" type="email" autocomplete="email" />
+      <input id="fname" name="firstName" autocomplete="given-name" />
+      <select id="country" name="country" autocomplete="country">
+        <option value="us">United States</option>
+        <option value="ca">Canada</option>
+      </select>
+    `);
+
+    let result: unknown = null;
+    for (const listener of messageListeners) {
+      const response = listener({
+        type: "PREVIEW_FILL",
+        config: {
+          email: { enabled: true, probability: 100, customValues: [{ value: "a@b.com", weight: 100 }] },
+          firstName: { enabled: true, probability: 100, customValues: [{ value: "Alice", weight: 100 }] },
+          country: { enabled: true, probability: 100, customValues: [{ value: "United States", weight: 100 }] },
+        },
+        locale: "en",
+      });
+      if (response instanceof Promise) {
+        result = await response;
+      }
+    }
+
+    expect(result).not.toBeNull();
+    expect(result).toHaveProperty("entries");
+    expect(Array.isArray((result as { entries: unknown }).entries)).toBe(true);
+    expect((result as { entries: unknown[] }).entries.length).toBe(3);
+
+    const entries = (result as { entries: { id: string; fieldType: string; value: string | null }[] }).entries;
+    const byId: Record<string, typeof entries[0]> = {};
+    for (const e of entries) byId[e.id] = e;
+
+    expect(byId["email"].fieldType).toBe("email");
+    expect(byId["email"].value).toBe("a@b.com");
+    expect(byId["fname"].fieldType).toBe("firstName");
+    expect(byId["fname"].value).toBe("Alice");
+    expect(byId["country"].fieldType).toBe("country");
+    expect(byId["country"].value).toBe("United States");
+
+    cleanup(form);
+  });
+
+  it("returns empty entries array for a page with no fillable fields", async () => {
+    document.body.innerHTML = "<div>no forms here</div>";
+
+    let result: unknown = null;
+    for (const listener of messageListeners) {
+      const response = listener({
+        type: "PREVIEW_FILL",
+        config: {},
+        locale: "en",
+      });
+      if (response instanceof Promise) {
+        result = await response;
+      }
+    }
+
+    expect(result).not.toBeNull();
+    expect(result).toHaveProperty("entries");
+    expect((result as { entries: unknown[] }).entries).toEqual([]);
+
+    document.body.innerHTML = "";
+  });
+
+  it("returns entries with correct PreviewEntry shape", async () => {
+    const form = makeForm(`
+      <input id="email" name="email" type="email" autocomplete="email" />
+    `);
+
+    let result: unknown = null;
+    for (const listener of messageListeners) {
+      const response = listener({
+        type: "PREVIEW_FILL",
+        config: {
+          email: { enabled: true, probability: 100, customValues: [{ value: "test@test.com", weight: 100 }] },
+        },
+        locale: "en",
+      });
+      if (response instanceof Promise) {
+        result = await response;
+      }
+    }
+
+    expect(result).not.toBeNull();
+    const entries = (result as { entries: unknown[] }).entries;
+    expect(entries.length).toBe(1);
+
+    const entry = entries[0] as Record<string, unknown>;
+    expect(entry).toHaveProperty("id");
+    expect(entry).toHaveProperty("label");
+    expect(entry).toHaveProperty("fieldType");
+    expect(entry).toHaveProperty("value");
+    expect(entry).toHaveProperty("isFrameworkDropdown");
+    expect(entry).toHaveProperty("groupType");
+    expect(entry).toHaveProperty("groupId");
+    expect(entry.fieldType).toBe("email");
+    expect(entry.value).toBe("test@test.com");
+    expect(entry.isFrameworkDropdown).toBe(false);
+    expect(entry.groupType).toBe("single");
+
+    cleanup(form);
+  });
+
+  it("does NOT mutate DOM values", async () => {
+    const form = makeForm(`
+      <input id="email" name="email" type="email" autocomplete="email" />
+    `);
+    const input = form.querySelector<HTMLInputElement>("#email")!;
+    const prevValue = input.value;
+
+    for (const listener of messageListeners) {
+      const response = listener({
+        type: "PREVIEW_FILL",
+        config: {
+          email: { enabled: true, probability: 100, customValues: [{ value: "should-not-appear", weight: 100 }] },
+        },
+        locale: "en",
+      });
+      if (response instanceof Promise) {
+        await response;
+      }
+    }
+
+    expect(input.value).toBe(prevValue);
+
+    cleanup(form);
+  });
+
+  it("includes framework dropdowns in entries", async () => {
+    const form = makeForm(`
+      <div class="vue-select" role="combobox" name="country">
+        <li data-value="us">United States</li>
+        <li data-value="ca">Canada</li>
+      </div>
+    `);
+
+    let result: unknown = null;
+    for (const listener of messageListeners) {
+      const response = listener({
+        type: "PREVIEW_FILL",
+        config: {
+          country: { enabled: true, probability: 100, customValues: [{ value: "United States", weight: 100 }] },
+        },
+        locale: "en",
+      });
+      if (response instanceof Promise) {
+        result = await response;
+      }
+    }
+
+    expect(result).not.toBeNull();
+    const entries = (result as { entries: unknown[] }).entries;
+    expect(entries.length).toBeGreaterThanOrEqual(1);
+
+    const entry = entries[0] as Record<string, unknown>;
+    expect(entry.isFrameworkDropdown).toBe(true);
+
+    cleanup(form);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // APPROVAL TESTS for T4: countFillableInDocument extraction
 // These capture current countFillableInputs behavior before refactor.
 // ---------------------------------------------------------------------------

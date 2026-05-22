@@ -7,6 +7,7 @@
   import type { TabDef } from "../../lib/types";
   import Header from "./components/header.svelte";
   import FillButton from "./components/fillButton.svelte";
+  import PreviewTab from "./components/PreviewTab.svelte";
   import ConfigTable from "./components/configTable.svelte";
   import SettingsMenu from "./components/settingsMenu.svelte";
   import AboutModal from "./components/aboutModal.svelte";
@@ -90,32 +91,36 @@
   });
 
   async function onFill() {
-    const config: FakerConfig = Object.fromEntries(
-      FIELDS.map((f) => [
-        f.type,
-        {
-          enabled: true,
-          probability: 100,
-          customValues: Array.isArray(customValues[f.type])
-            ? customValues[f.type].map((v) => ({
-                value: v.value,
-                weight: v.weight,
-              }))
-            : [],
-        },
-      ]),
-    );
-    console.log("config: ", config);
-    const [tab] = await browser.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (tab?.id != null) {
-      await browser.tabs.sendMessage(tab.id, {
-        type: "FILL_FORM",
-        config,
-        locale,
+    try {
+      const config: FakerConfig = Object.fromEntries(
+        FIELDS.map((f) => [
+          f.type,
+          {
+            enabled: true,
+            probability: 100,
+            customValues: Array.isArray(customValues[f.type])
+              ? customValues[f.type].map((v) => ({
+                  value: v.value,
+                  weight: v.weight,
+                }))
+              : [],
+          },
+        ]),
+      );
+      console.log("config: ", config);
+      const [tab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
       });
+      if (tab?.id != null) {
+        await browser.tabs.sendMessage(tab.id, {
+          type: "FILL_FORM",
+          config,
+          locale,
+        });
+      }
+    } catch (err) {
+      console.error("[fake-my-forms] Fill failed:", err);
     }
   }
 </script>
@@ -135,11 +140,7 @@
         {onUpdateWeight}
       />
     {:else if activeTab === "preview"}
-      <div class="placeholder-view">
-        <div class="placeholder-icon">👁</div>
-        <p class="placeholder-title">Preview</p>
-        <p class="placeholder-desc">See how your forms will look before filling. Coming soon!</p>
-      </div>
+      <PreviewTab {locale} {customValues} />
     {:else if activeTab === "per-fill"}
       <div class="placeholder-view">
         <div class="placeholder-icon">✏️</div>
@@ -175,12 +176,19 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    max-height: 600px;
+    height: 600px;
   }
 
   .main-content {
     flex: 1;
     overflow-y: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .main-content > :global(*) {
+    flex: 1;
     min-height: 0;
   }
 

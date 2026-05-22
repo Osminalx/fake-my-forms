@@ -1,5 +1,8 @@
 <script lang="ts">
-  let { inputCount = 0, onAboutClick }: {
+  let {
+    inputCount = 0,
+    onAboutClick,
+  }: {
     inputCount?: number;
     onAboutClick?: () => void;
   } = $props();
@@ -8,7 +11,7 @@
 <header class="mainHeader">
   <div class="logo">⚡</div>
   <div class="header-text">
-    <h1 class="header-title">FakeIt</h1>
+    <h1 class="header-title">Fake my Forms</h1>
     <h3 class="header-sub">form autofill & faker</h3>
   </div>
   <div class="header-actions">
@@ -22,7 +25,7 @@
       type="button"
       class="info-btn"
       onclick={onAboutClick}
-      aria-label="About FakeIt"
+      aria-label="About Fake my Forms"
     >
       ?
     </button>
@@ -59,7 +62,7 @@
   }
 
   .header-title {
-    font-family: 'Syne', sans-serif;
+    font-family: "Syne", sans-serif;
     font-weight: 800;
     font-size: 14px;
     color: var(--text);
@@ -102,8 +105,13 @@
   }
 
   @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.3;
+    }
   }
 
   .stats-count {
@@ -122,7 +130,7 @@
     color: var(--muted);
     font-size: 12px;
     font-weight: 700;
-    font-family: 'Syne', sans-serif;
+    font-family: "Syne", sans-serif;
     cursor: pointer;
     display: flex;
     align-items: center;

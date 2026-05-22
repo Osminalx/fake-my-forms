@@ -78,7 +78,7 @@
       </button>
       <div class="modal-body">
         <div class="modal-icon">⚡</div>
-        <h2 class="modal-title">FakeIt v0.1.0</h2>
+        <h2 class="modal-title">Fake my Forms v0.1.0</h2>
         <p class="modal-desc">
           Click the icon or press <kbd class="kbd">Alt+Shift+F</kbd> to fill all
           inputs with fake data.
@@ -87,7 +87,8 @@
           Custom values override faker defaults. Empty = auto-generated.
         </p>
         <div class="modal-tech">
-          Built with <strong>WXT</strong> + <strong>Svelte</strong> + <strong>faker-js</strong>
+          Built with <strong>WXT</strong> + <strong>Svelte</strong> +
+          <strong>faker-js</strong>
         </div>
         <div class="modal-links">
           <a
@@ -171,7 +172,7 @@
   }
 
   .modal-title {
-    font-family: 'Syne', sans-serif;
+    font-family: "Syne", sans-serif;
     font-weight: 800;
     font-size: 16px;
     color: var(--text);
