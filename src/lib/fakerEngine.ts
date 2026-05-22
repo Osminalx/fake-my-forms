@@ -143,9 +143,21 @@ export function generateValue(
 	if (!config.enabled || !shouldFill(config.probability)) return null;
 
 	if (config.customValues.length > 0) {
-		const picked = pickWeighted(config.customValues);
-		if (picked !== null) return picked;
+		const active = config.customValues.filter((item) => item.weight > 0);
+		if (active.length > 0) {
+			// The MAX weight across all custom values determines the probability
+			// of choosing a custom value vs falling through to faker.
+			//   weight=100 → always custom
+			//   weight=50  → 50% custom, 50% faker
+			//   weight=0   → always faker
+			const maxWeight = Math.max(...active.map((item) => item.weight));
+			if (Math.random() * 100 < maxWeight) {
+				const picked = pickWeighted(config.customValues);
+				if (picked !== null) return picked;
+			}
+		}
 		// Fall through to faker generator when all weights are 0
+		// or when the random roll doesn't favor custom values
 	}
 
 	const loc = location?.localeFaker ?? faker;

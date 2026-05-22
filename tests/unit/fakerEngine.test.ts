@@ -95,6 +95,9 @@ describe("generateValue — customValues", () => {
 
 describe("generateValue — weighted custom values", () => {
   it("with weighted custom values, higher weight values appear more frequently", () => {
+    // With maxWeight=80, custom values are chosen 80% of the time.
+    // Among custom values, heavy(80) has 80/(80+20)=80% share.
+    // So P(heavy) = 0.80 * 0.80 = 0.64 → ~3200 of 5000
     const config = {
       enabled: true,
       probability: 100,
@@ -108,8 +111,50 @@ describe("generateValue — weighted custom values", () => {
     for (let i = 0; i < runs; i++) {
       if (generateValue("email", config) === "heavy") heavyCount++;
     }
-    expect(heavyCount).toBeGreaterThan(runs * 0.75);
-    expect(heavyCount).toBeLessThan(runs * 0.85);
+    expect(heavyCount).toBeGreaterThan(runs * 0.56);
+    expect(heavyCount).toBeLessThan(runs * 0.72);
+  });
+
+  it("weight determines probability of custom vs faker (single value at 50%)", () => {
+    const config = {
+      enabled: true,
+      probability: 100,
+      customValues: [{ value: "solo", weight: 50 }],
+    };
+    let customCount = 0;
+    const runs = 2000;
+    for (let i = 0; i < runs; i++) {
+      if (generateValue("email", config) === "solo") customCount++;
+    }
+    // P(custom) = 50%. Expect ~1000. Allow 35%-65% range.
+    expect(customCount).toBeGreaterThan(runs * 0.35);
+    expect(customCount).toBeLessThan(runs * 0.65);
+  });
+
+  it("weight=100 always picks custom value (backward compatible)", () => {
+    const config = {
+      enabled: true,
+      probability: 100,
+      customValues: [{ value: "siempre", weight: 100 }],
+    };
+    for (let i = 0; i < 20; i++) {
+      expect(generateValue("text", config)).toBe("siempre");
+    }
+  });
+
+  it("weight=1 rarely picks custom value", () => {
+    const config = {
+      enabled: true,
+      probability: 100,
+      customValues: [{ value: "raro", weight: 1 }],
+    };
+    let customCount = 0;
+    const runs = 2000;
+    for (let i = 0; i < runs; i++) {
+      if (generateValue("email", config) === "raro") customCount++;
+    }
+    // P(custom) = 1%. Expect ~20. Should be less than 5%.
+    expect(customCount).toBeLessThan(runs * 0.05);
   });
 
   it("when all weights are 0, falls through to faker generator", () => {
