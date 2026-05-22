@@ -183,6 +183,13 @@
     flex: 1;
     overflow-y: auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .main-content > :global(*) {
+    flex: 1;
+    min-height: 0;
   }
 
   .sticky-fill-wrap {
