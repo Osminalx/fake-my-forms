@@ -7,6 +7,7 @@
   import type { TabDef } from "../../lib/types";
   import Header from "./components/header.svelte";
   import FillButton from "./components/fillButton.svelte";
+  import PreviewTab from "./components/PreviewTab.svelte";
   import ConfigTable from "./components/configTable.svelte";
   import SettingsMenu from "./components/settingsMenu.svelte";
   import AboutModal from "./components/aboutModal.svelte";
@@ -135,11 +136,7 @@
         {onUpdateWeight}
       />
     {:else if activeTab === "preview"}
-      <div class="placeholder-view">
-        <div class="placeholder-icon">👁</div>
-        <p class="placeholder-title">Preview</p>
-        <p class="placeholder-desc">See how your forms will look before filling. Coming soon!</p>
-      </div>
+      <PreviewTab {locale} {customValues} />
     {:else if activeTab === "per-fill"}
       <div class="placeholder-view">
         <div class="placeholder-icon">✏️</div>

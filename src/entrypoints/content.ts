@@ -15,8 +15,9 @@ import {
 	getLabelText,
 	type SelectElementType,
 } from "@/lib/fieldDetector";
-import { buildGroups, type SemanticField } from "@/lib/semanticGrouper";
+import { buildGroups, type FieldGroup, type SemanticField } from "@/lib/semanticGrouper";
 import { detectPageLocale, loadLocale } from "@/lib/locales";
+import type { PreviewEntry } from "@/lib/types";
 
 // Since the modern javascript frameworks detect changes through events
 // it's not as simple as just input.value = 'something'
@@ -579,23 +580,27 @@ interface FillDocumentResult {
 }
 
 /**
- * Fills all fillable fields in the given document (main page or same-origin iframe).
- * Returns a summary result object with counts.
+ * A field group with its pre-computed value.
+ * Internal type — bridges detectAndGenerate() and fillDocument().
  */
-export function fillDocument(
+type FieldValueGroup = {
+	group: FieldGroup;
+	value: string | null;
+};
+
+/**
+ * Shared internal: full detection + grouping + value generation.
+ * Does NOT mutate DOM — no radio/checkbox pass, no fillInput/fillSelect calls.
+ * Returns both serializable entries (for popup preview) and groups with element refs (for DOM application).
+ */
+function detectAndGenerate(
 	doc: Document,
 	config: FakerConfig,
 	locale: string,
-): FillDocumentResult {
+): { entries: PreviewEntry[]; groups: FieldValueGroup[] } {
 	const localePatterns = loadLocale(locale);
 
-	// --- Radio / Checkbox pass ---
-	// Process these FIRST so that conditional fields (revealed by radio/checkbox selection)
-	// are visible when the main fill pass runs.
-	const radioFilled = processRadioGroups(doc);
-	const checkboxFilled = processCheckboxGroups(doc);
-
-	// Extended query: include framework dropdowns (Vue/React custom dropdowns)
+	// Query fillable elements (same selector as the original fillDocument)
 	const elements = doc.querySelectorAll(
 		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select, [role="combobox"], [role="listbox"], .dropdown, .select-menu',
 	);
@@ -603,35 +608,16 @@ export function fillDocument(
 	const fields: SemanticField[] = [];
 	let autoId = 0;
 
-	// Summary statistics
-	const stats = {
-		totalSelects: 0,
-		filled: radioFilled + checkboxFilled,
-		skipped: 0,
-		frameworkDropdowns: 0,
-	};
-
-	// Framework dropdowns that were disabled during the first pass (e.g. city locked until state is chosen).
-	// We retry these after a delay so a state-selection has time to unlock them.
-	type DeferredDropdown = {
-		element: HTMLElement;
-		value: string;
-		frameworkType: SelectElementType;
-	};
-	const deferredDropdowns: DeferredDropdown[] = [];
-
 	elements.forEach((el) => {
-		// Handle select elements (native)
-		// Use tagName instead of instanceof for cross-document safety (Firefox Xray wrappers)
+		// Handle native select elements
 		if (el.tagName === "SELECT") {
-			stats.totalSelects++;
 			const fieldType = detectSelectFieldType(el, locale);
 			fields.push({
 				id: el.id || `_fmf_${autoId++}`,
 				element: el,
 				fieldType,
-				name: el.name,
-				label: getLabelText(el, doc),
+				name: (el as HTMLSelectElement).name,
+				label: getLabelText(el as unknown as HTMLSelectElement, doc),
 			});
 			return;
 		}
@@ -639,8 +625,6 @@ export function fillDocument(
 		// Handle framework dropdowns (Vue/React custom dropdowns)
 		const elementType = detectSelectElementType(el);
 		if (elementType && elementType !== "native-select") {
-			stats.totalSelects++;
-			stats.frameworkDropdowns++;
 			const fieldType = detectSelectFieldType(el, locale);
 			console.debug("[fake-my-forms][discovery] framework dropdown", {
 				id: el.id,
@@ -657,19 +641,15 @@ export function fillDocument(
 				fieldType,
 				name: el.getAttribute("name") || "",
 				label: getLabelText(el as unknown as HTMLSelectElement, doc),
-				// Mark as framework dropdown for special handling
 				isFrameworkDropdown: true,
 				frameworkType: elementType,
 			});
 			return;
 		}
 
-		// Use tagName instead of instanceof for cross-document safety (Firefox Xray wrappers)
+		// Handle INPUT / TEXTAREA
 		const tag = el.tagName;
-		if (tag !== "INPUT" && tag !== "TEXTAREA") {
-			return;
-		}
-		// File inputs cannot be filled programmatically
+		if (tag !== "INPUT" && tag !== "TEXTAREA") return;
 		if (tag === "INPUT" && (el as HTMLInputElement).type === "file") return;
 
 		const input = el as HTMLInputElement | HTMLTextAreaElement;
@@ -706,6 +686,9 @@ export function fillDocument(
 		),
 	);
 
+	const entries: PreviewEntry[] = [];
+	const valueGroups: FieldValueGroup[] = [];
+
 	for (const group of groups) {
 		if (group.type === "confirm-pair") {
 			const fieldConfig = config[group.primary.fieldType] ?? {
@@ -718,6 +701,114 @@ export function fillDocument(
 				fieldConfig,
 				locationContext,
 			);
+			const isFwPrimary = (
+				group.primary as SemanticField & { isFrameworkDropdown?: boolean }
+			).isFrameworkDropdown ?? false;
+			const isFwConfirm = (
+				group.confirm as SemanticField & { isFrameworkDropdown?: boolean }
+			).isFrameworkDropdown ?? false;
+
+			entries.push({
+				id: group.primary.id,
+				label: group.primary.label,
+				fieldType: group.primary.fieldType,
+				value,
+				isFrameworkDropdown: isFwPrimary,
+				groupType: "confirm-primary",
+				groupId: group.primary.id,
+			});
+			entries.push({
+				id: group.confirm.id,
+				label: group.confirm.label,
+				fieldType: group.confirm.fieldType,
+				value,
+				isFrameworkDropdown: isFwConfirm,
+				groupType: "confirm",
+				groupId: group.primary.id,
+			});
+			valueGroups.push({ group, value });
+		} else {
+			const fieldConfig = config[group.field.fieldType] ?? {
+				enabled: true,
+				probability: 100,
+				customValues: [],
+			};
+			const value = generateValue(
+				group.field.fieldType,
+				fieldConfig,
+				locationContext,
+			);
+			const isFw = (
+				group.field as SemanticField & { isFrameworkDropdown?: boolean }
+			).isFrameworkDropdown ?? false;
+
+			entries.push({
+				id: group.field.id,
+				label: group.field.label,
+				fieldType: group.field.fieldType,
+				value,
+				isFrameworkDropdown: isFw,
+				groupType: "single",
+				groupId: group.field.id,
+			});
+			valueGroups.push({ group, value });
+		}
+	}
+
+	return { entries, groups: valueGroups };
+}
+
+/**
+ * Pure value computation — no DOM writes.
+ * Used by the PREVIEW_FILL message handler for the popup preview tab.
+ * Returns the same values that fillDocument() would generate for identical inputs.
+ */
+export function computeFieldValues(
+	doc: Document,
+	config: FakerConfig,
+	locale: string,
+): PreviewEntry[] {
+	return detectAndGenerate(doc, config, locale).entries;
+}
+
+/**
+ * Fills all fillable fields in the given document (main page or same-origin iframe).
+ * Returns a summary result object with counts.
+ */
+export function fillDocument(
+	doc: Document,
+	config: FakerConfig,
+	locale: string,
+): FillDocumentResult {
+	// --- Radio / Checkbox pass ---
+	// Process these FIRST so that conditional fields (revealed by radio/checkbox selection)
+	// are visible when the main fill pass runs.
+	const radioFilled = processRadioGroups(doc);
+	const checkboxFilled = processCheckboxGroups(doc);
+
+	// Use the shared detection + generation pipeline.
+	// Returns pre-computed values for every field group.
+	const { groups } = detectAndGenerate(doc, config, locale);
+
+	// Summary statistics
+	const stats = {
+		totalSelects: 0,
+		filled: radioFilled + checkboxFilled,
+		skipped: 0,
+		frameworkDropdowns: 0,
+	};
+
+	// Framework dropdowns that were disabled during the first pass (e.g. city locked until state is chosen).
+	// We retry these after a delay so a state-selection has time to unlock them.
+	type DeferredDropdown = {
+		element: HTMLElement;
+		value: string;
+		frameworkType: SelectElementType;
+	};
+	const deferredDropdowns: DeferredDropdown[] = [];
+
+	for (const { group, value } of groups) {
+		if (group.type === "confirm-pair") {
 			console.debug(
 				"[fake-my-forms][fill] confirm-pair",
 				group.primary.fieldType,
@@ -798,16 +889,6 @@ export function fillDocument(
 				}
 			}
 		} else {
-			const fieldConfig = config[group.field.fieldType] ?? {
-				enabled: true,
-				probability: 100,
-				customValues: [],
-			};
-			const value = generateValue(
-				group.field.fieldType,
-				fieldConfig,
-				locationContext,
-			);
 			const field = group.field as SemanticField & {
 				isFrameworkDropdown?: boolean;
 				frameworkType?: SelectElementType;
@@ -873,6 +954,22 @@ export function fillDocument(
 					fillInput(el, value);
 				}
 			}
+		}
+	}
+
+	// Compute totalSelects and frameworkDropdowns from the groups
+	for (const { group } of groups) {
+		if (group.type === "confirm-pair") {
+			const isFwP = (group.primary as SemanticField & { isFrameworkDropdown?: boolean }).isFrameworkDropdown ?? false;
+			if (isFwP || group.primary.element.tagName === "SELECT") stats.totalSelects++;
+			if (isFwP) stats.frameworkDropdowns++;
+			const isFwC = (group.confirm as SemanticField & { isFrameworkDropdown?: boolean }).isFrameworkDropdown ?? false;
+			if (isFwC || group.confirm.element.tagName === "SELECT") stats.totalSelects++;
+			if (isFwC) stats.frameworkDropdowns++;
+		} else {
+			const isFw = (group.field as SemanticField & { isFrameworkDropdown?: boolean }).isFrameworkDropdown ?? false;
+			if (isFw || group.field.element.tagName === "SELECT") stats.totalSelects++;
+			if (isFw) stats.frameworkDropdowns++;
 		}
 	}
 
@@ -986,6 +1083,27 @@ export default defineContentScript({
 			if (message.type === "GET_INPUT_STATS") {
 				const count = countFillableInputs();
 				return Promise.resolve({ count });
+			}
+		});
+		// Preview fill values (passive — no DOM mutation)
+		browser.runtime.onMessage.addListener((message) => {
+			if (message.type === "PREVIEW_FILL") {
+				const mainEntries = computeFieldValues(
+					document,
+					message.config,
+					message.locale,
+				);
+				const iframeDocs = getAccessibleFrameDocs(document);
+				let allEntries = [...mainEntries];
+				for (const iframeDoc of iframeDocs) {
+					const iframeEntries = computeFieldValues(
+						iframeDoc,
+						message.config,
+						message.locale,
+					);
+					allEntries = allEntries.concat(iframeEntries);
+				}
+				return Promise.resolve({ entries: allEntries });
 			}
 		});
 
