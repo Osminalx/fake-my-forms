@@ -98,36 +98,41 @@
   });
 
   async function onFill() {
-    const config: FakerConfig = Object.fromEntries(
-      FIELDS.map((f) => [
-        f.type,
-        {
-          enabled: true,
-          probability: 100,
-          customValues: Array.isArray(customValues[f.type])
-            ? customValues[f.type].map((v) => ({
-                value: v.value,
-                weight: v.weight,
-              }))
-            : [],
-        },
-      ]),
-    );
-    console.log("config: ", config);
-    const [tab] = await browser.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (tab?.id != null) {
-      await browser.tabs.sendMessage(tab.id, {
-        type: "FILL_FORM",
-        config,
-        locale,
-        values: previewValues ?? undefined,
+    try {
+      const config: FakerConfig = Object.fromEntries(
+        FIELDS.map((f) => [
+          f.type,
+          {
+            enabled: true,
+            probability: 100,
+            customValues: Array.isArray(customValues[f.type])
+              ? customValues[f.type].map((v) => ({
+                  value: v.value,
+                  weight: v.weight,
+                }))
+              : [],
+          },
+        ]),
+      );
+      console.log("config: ", config);
+      const [tab] = await browser.tabs.query({
+        active: true,
+        currentWindow: true,
       });
+      if (tab?.id != null) {
+        await browser.tabs.sendMessage(tab.id, {
+          type: "FILL_FORM",
+          config,
+          locale,
+          values: previewValues ?? undefined,
+        });
+      }
+    } catch (err) {
+      console.error("[fake-my-forms] Fill failed:", err);
+    } finally {
+      // Always clear cached values — even on error, so the user can retry
+      previewValues = null;
     }
-    // Clear cached values after fill so subsequent fills regenerate fresh
-    previewValues = null;
   }
 </script>
 

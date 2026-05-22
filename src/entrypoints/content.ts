@@ -1089,7 +1089,11 @@ export default defineContentScript({
 		// Listen popup messages
 		browser.runtime.onMessage.addListener((message) => {
 			if (message.type === "FILL_FORM") {
-				fillAllInputs(message.config, message.locale, message.values);
+				try {
+					fillAllInputs(message.config, message.locale, message.values);
+				} catch (err) {
+					console.error("[fake-my-forms] fillAllInputs error:", err);
+				}
 			}
 		});
 		// Count forms' inputs
