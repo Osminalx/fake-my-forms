@@ -25,11 +25,12 @@ function fillInput(
 	value: string,
 ) {
 	// File inputs cannot be set programmatically — browsers throw InvalidStateError
-	if (input instanceof HTMLInputElement && input.type === "file") return;
+	// Use tagName instead of instanceof for cross-document safety (Firefox Xray wrappers)
+	if (input.tagName === "INPUT" && input.type === "file") return;
 
 	// Use the correct prototype setter based on element type
 	const prototype =
-		input instanceof HTMLTextAreaElement
+		input.tagName === "TEXTAREA"
 			? window.HTMLTextAreaElement.prototype
 			: window.HTMLInputElement.prototype;
 
@@ -130,11 +131,13 @@ export function fillSelect(select: HTMLSelectElement, value: string): boolean {
  * 2. Any [role="listbox"] in the document → its [role="option"] children
  * 3. Direct document-wide [role="option"] scan (catches all portals)
  */
-function findDropdownOptions(element: HTMLElement): Element[] {
+function findDropdownOptions(element: HTMLElement, doc?: Document): Element[] {
+	const owner = doc ?? element.ownerDocument ?? document;
+
 	// 1. aria-controls is set by React Select when the menu is open
 	const listboxId = element.getAttribute("aria-controls");
 	if (listboxId && listboxId !== element.id) {
-		const listbox = document.getElementById(listboxId);
+		const listbox = owner.getElementById(listboxId);
 		if (listbox) {
 			const opts = Array.from(listbox.querySelectorAll('[role="option"]'));
 			if (opts.length > 0) return opts;
@@ -144,14 +147,14 @@ function findDropdownOptions(element: HTMLElement): Element[] {
 	}
 
 	// 2. Any visible listbox in the document (React Select portal, Vue Select portal, etc.)
-	const allListboxes = document.querySelectorAll('[role="listbox"]');
+	const allListboxes = owner.querySelectorAll('[role="listbox"]');
 	for (const lb of Array.from(allListboxes)) {
 		const opts = Array.from(lb.querySelectorAll('[role="option"]'));
 		if (opts.length > 0) return opts;
 	}
 
 	// 3. Flat document scan — some libraries don't nest options inside a listbox
-	return Array.from(document.querySelectorAll('[role="option"]'));
+	return Array.from(owner.querySelectorAll('[role="option"]'));
 }
 
 /**
@@ -193,7 +196,8 @@ export function handleFrameworkDropdown(
 		return false;
 	}
 
-	const isInput = element instanceof HTMLInputElement;
+	// tagName for cross-document safety (Firefox Xray wrappers)
+	const isInput = element.tagName === "INPUT";
 	// const nativeInputSetter = isInput
 	// 	? Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
 	// 	: null;
@@ -448,8 +452,8 @@ function fillCheckboxOrRadio(input: HTMLInputElement, checked: boolean) {
  *
  * Returns the number of radio groups filled.
  */
-function processRadioGroups(): number {
-	const allRadios = document.querySelectorAll<HTMLInputElement>(
+function processRadioGroups(doc: Document = document): number {
+	const allRadios = doc.querySelectorAll<HTMLInputElement>(
 		'input[type="radio"]',
 	);
 	const processed = new Set<HTMLInputElement>();
@@ -458,7 +462,7 @@ function processRadioGroups(): number {
 	for (const radio of allRadios) {
 		if (processed.has(radio) || radio.disabled) continue;
 
-		const group = detectRadioElement(radio);
+		const group = detectRadioElement(radio, doc);
 		group.forEach((r) => processed.add(r));
 
 		const enabled = group.filter((r) => !r.disabled);
@@ -484,8 +488,8 @@ function processRadioGroups(): number {
  *
  * Returns the number of checkbox groups filled (where count > 0).
  */
-function processCheckboxGroups(): number {
-	const allCheckboxes = document.querySelectorAll<HTMLInputElement>(
+function processCheckboxGroups(doc: Document = document): number {
+	const allCheckboxes = doc.querySelectorAll<HTMLInputElement>(
 		'input[type="checkbox"]',
 	);
 	const processed = new Set<HTMLInputElement>();
@@ -494,7 +498,7 @@ function processCheckboxGroups(): number {
 	for (const cb of allCheckboxes) {
 		if (processed.has(cb) || cb.disabled) continue;
 
-		const group = detectCheckboxElement(cb);
+		const group = detectCheckboxElement(cb, doc);
 		group.forEach((c) => processed.add(c));
 
 		const enabled = group.filter((c) => !c.disabled);
@@ -520,34 +524,79 @@ function processCheckboxGroups(): number {
 	return filled;
 }
 
-export function countFillableInputs(): number {
-	const elements = document.querySelectorAll(
+export function countFillableInDocument(doc: Document): number {
+	const elements = doc.querySelectorAll(
 		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="file"]), textarea, select',
 	);
 
 	// Filter out disabled and multiple selects (REQ-1)
+	// tagName for cross-document safety (Firefox Xray wrappers)
 	return Array.from(elements).filter((el) => {
-		if (el instanceof HTMLSelectElement) {
-			return !el.disabled && !el.multiple;
+		if (el.tagName === "SELECT") {
+			return !(el as HTMLSelectElement).disabled && !(el as HTMLSelectElement).multiple;
 		}
 		return true;
 	}).length;
 }
 
-// Exported for testing purposes
-export function fillAllInputs(config: FakerConfig, locale?: string) {
-	// Cascade: explicit locale → detectPageLocale() → "en"
-	const resolvedLocale = locale ?? detectPageLocale();
-	const localePatterns = loadLocale(resolvedLocale);
+export function countFillableInputs(): number {
+	let count = countFillableInDocument(document);
+	const iframeDocs = getAccessibleFrameDocs(document);
+	for (const iframeDoc of iframeDocs) {
+		count += countFillableInDocument(iframeDoc);
+	}
+	return count;
+}
+
+/**
+ * Iterates all iframe and frame elements in the given root document,
+ * safely accesses their contentDocument, and returns accessible documents.
+ * Cross-origin frames are silently skipped.
+ */
+export function getAccessibleFrameDocs(root: Document): Document[] {
+	const result: Document[] = [];
+	for (const el of root.querySelectorAll("iframe, frame")) {
+		try {
+			const d = (el as HTMLIFrameElement).contentDocument;
+			if (d) result.push(d);
+		} catch {
+			/* cross-origin → silent skip */
+		}
+	}
+	return result;
+}
+
+/**
+ * Result summary for a single document's fill pass.
+ */
+interface FillDocumentResult {
+	totalSelects: number;
+	filled: number;
+	skipped: number;
+	frameworkDropdowns: number;
+	radioGroups: number;
+	checkboxGroups: number;
+}
+
+/**
+ * Fills all fillable fields in the given document (main page or same-origin iframe).
+ * Returns a summary result object with counts.
+ */
+export function fillDocument(
+	doc: Document,
+	config: FakerConfig,
+	locale: string,
+): FillDocumentResult {
+	const localePatterns = loadLocale(locale);
 
 	// --- Radio / Checkbox pass ---
 	// Process these FIRST so that conditional fields (revealed by radio/checkbox selection)
 	// are visible when the main fill pass runs.
-	const radioFilled = processRadioGroups();
-	const checkboxFilled = processCheckboxGroups();
+	const radioFilled = processRadioGroups(doc);
+	const checkboxFilled = processCheckboxGroups(doc);
 
 	// Extended query: include framework dropdowns (Vue/React custom dropdowns)
-	const elements = document.querySelectorAll(
+	const elements = doc.querySelectorAll(
 		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select, [role="combobox"], [role="listbox"], .dropdown, .select-menu',
 	);
 
@@ -573,15 +622,16 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 
 	elements.forEach((el) => {
 		// Handle select elements (native)
-		if (el instanceof HTMLSelectElement) {
+		// Use tagName instead of instanceof for cross-document safety (Firefox Xray wrappers)
+		if (el.tagName === "SELECT") {
 			stats.totalSelects++;
-			const fieldType = detectSelectFieldType(el, resolvedLocale);
+			const fieldType = detectSelectFieldType(el, locale);
 			fields.push({
 				id: el.id || `_fmf_${autoId++}`,
 				element: el,
 				fieldType,
 				name: el.name,
-				label: getLabelText(el),
+				label: getLabelText(el, doc),
 			});
 			return;
 		}
@@ -591,7 +641,7 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 		if (elementType && elementType !== "native-select") {
 			stats.totalSelects++;
 			stats.frameworkDropdowns++;
-			const fieldType = detectSelectFieldType(el, resolvedLocale);
+			const fieldType = detectSelectFieldType(el, locale);
 			console.debug("[fake-my-forms][discovery] framework dropdown", {
 				id: el.id,
 				tag: el.tagName,
@@ -606,7 +656,7 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 				element: el,
 				fieldType,
 				name: el.getAttribute("name") || "",
-				label: getLabelText(el as unknown as HTMLSelectElement),
+				label: getLabelText(el as unknown as HTMLSelectElement, doc),
 				// Mark as framework dropdown for special handling
 				isFrameworkDropdown: true,
 				frameworkType: elementType,
@@ -614,23 +664,22 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 			return;
 		}
 
-		if (
-			!(el instanceof HTMLInputElement) &&
-			!(el instanceof HTMLTextAreaElement)
-		) {
+		// Use tagName instead of instanceof for cross-document safety (Firefox Xray wrappers)
+		const tag = el.tagName;
+		if (tag !== "INPUT" && tag !== "TEXTAREA") {
 			return;
 		}
 		// File inputs cannot be filled programmatically
-		if (el instanceof HTMLInputElement && el.type === "file") return;
+		if (tag === "INPUT" && (el as HTMLInputElement).type === "file") return;
 
 		const input = el as HTMLInputElement | HTMLTextAreaElement;
-		const fieldType = detectFieldType(input, resolvedLocale);
+		const fieldType = detectFieldType(input, locale);
 		fields.push({
 			id: input.id || `_fmf_${autoId++}`,
 			element: input,
 			fieldType,
-			name: input instanceof HTMLInputElement ? input.name : "",
-			label: getLabelText(input),
+			name: input.tagName === "INPUT" ? (input as HTMLInputElement).name : "",
+			label: getLabelText(input, doc),
 		});
 	});
 
@@ -697,7 +746,7 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 						if (filled) stats.filled++;
 						else stats.skipped++;
 					}
-				} else if (group.primary.element instanceof HTMLSelectElement) {
+				} else if (group.primary.element.tagName === "SELECT") {
 					const filled = value
 						? fillSelect(group.primary.element, value) ||
 							fillSelectRandom(group.primary.element)
@@ -706,10 +755,8 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 					else stats.skipped++;
 				} else {
 					const el = group.primary.element;
-					if (
-						el instanceof HTMLInputElement ||
-						el instanceof HTMLTextAreaElement
-					) {
+					const t = el.tagName;
+					if (t === "INPUT" || t === "TEXTAREA") {
 						fillInput(el, value);
 					}
 				}
@@ -735,7 +782,7 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 						if (filled) stats.filled++;
 						else stats.skipped++;
 					}
-				} else if (group.confirm.element instanceof HTMLSelectElement) {
+				} else if (group.confirm.element.tagName === "SELECT") {
 					const filled = value
 						? fillSelect(group.confirm.element, value) ||
 							fillSelectRandom(group.confirm.element)
@@ -744,10 +791,8 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 					else stats.skipped++;
 				} else {
 					const el = group.confirm.element;
-					if (
-						el instanceof HTMLInputElement ||
-						el instanceof HTMLTextAreaElement
-					) {
+					const t = el.tagName;
+					if (t === "INPUT" || t === "TEXTAREA") {
 						fillInput(el, value);
 					}
 				}
@@ -813,7 +858,7 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 						else stats.skipped++;
 					}
 				}
-			} else if (group.field.element instanceof HTMLSelectElement) {
+			} else if (group.field.element.tagName === "SELECT") {
 				// Native select: try semantic fill first, fall back to random option pick
 				const filled = value
 					? fillSelect(group.field.element, value) ||
@@ -823,22 +868,13 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 				else stats.skipped++;
 			} else if (value) {
 				const el = group.field.element;
-				if (
-					el instanceof HTMLInputElement ||
-					el instanceof HTMLTextAreaElement
-				) {
+				const t = el.tagName;
+				if (t === "INPUT" || t === "TEXTAREA") {
 					fillInput(el, value);
 				}
 			}
 		}
 	}
-
-	// Log summary statistics
-	console.debug("[fake-my-forms] fillAllInputs summary:", {
-		...stats,
-		radioGroups: radioFilled,
-		checkboxGroups: checkboxFilled,
-	});
 
 	// Retry dropdowns that were disabled in the first pass (e.g. city locked until state is picked).
 	// We wait 800 ms: 300 ms for state's menu to open + option click + React re-render to unlock city.
@@ -869,6 +905,46 @@ export function fillAllInputs(config: FakerConfig, locale?: string) {
 			}
 		}, 800);
 	}
+
+	return {
+		totalSelects: stats.totalSelects,
+		filled: stats.filled,
+		skipped: stats.skipped,
+		frameworkDropdowns: stats.frameworkDropdowns,
+		radioGroups: radioFilled,
+		checkboxGroups: checkboxFilled,
+	};
+}
+
+export function fillAllInputs(config: FakerConfig, locale?: string) {
+	// Cascade: explicit locale → detectPageLocale() → "en"
+	const resolvedLocale = locale ?? detectPageLocale();
+
+	// Fill main document
+	const result = fillDocument(document, config, resolvedLocale);
+
+	// Fill same-origin iframes
+	const iframeDocs = getAccessibleFrameDocs(document);
+	for (const iframeDoc of iframeDocs) {
+		const iframeResult = fillDocument(iframeDoc, config, resolvedLocale);
+		// Merge iframe stats into main result for the summary
+		result.totalSelects += iframeResult.totalSelects;
+		result.filled += iframeResult.filled;
+		result.skipped += iframeResult.skipped;
+		result.frameworkDropdowns += iframeResult.frameworkDropdowns;
+		result.radioGroups += iframeResult.radioGroups;
+		result.checkboxGroups += iframeResult.checkboxGroups;
+	}
+
+	// Log summary statistics
+	console.debug("[fake-my-forms] fillAllInputs summary:", {
+		totalSelects: result.totalSelects,
+		filled: result.filled,
+		skipped: result.skipped,
+		frameworkDropdowns: result.frameworkDropdowns,
+		radioGroups: result.radioGroups,
+		checkboxGroups: result.checkboxGroups,
+	});
 }
 
 async function getStoredFakerConfig(): Promise<FakerConfig> {
