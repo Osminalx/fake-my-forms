@@ -779,6 +779,7 @@ export function fillDocument(
 	doc: Document,
 	config: FakerConfig,
 	locale: string,
+	values?: Record<string, string>,
 ): FillDocumentResult {
 	// --- Radio / Checkbox pass ---
 	// Process these FIRST so that conditional fields (revealed by radio/checkbox selection)
@@ -789,6 +790,19 @@ export function fillDocument(
 	// Use the shared detection + generation pipeline.
 	// Returns pre-computed values for every field group.
 	const { groups } = detectAndGenerate(doc, config, locale);
+
+	// Override values with preview-cached ones if provided.
+	// Ensures preview shows the SAME values that will be filled.
+	if (values) {
+		for (const fvg of groups) {
+			const key = fvg.group.type === "confirm-pair"
+				? fvg.group.primary.id
+				: fvg.group.field.id;
+			if (values[key] !== undefined) {
+				fvg.value = values[key];
+			}
+		}
+	}
 
 	// Summary statistics
 	const stats = {
@@ -1013,17 +1027,17 @@ export function fillDocument(
 	};
 }
 
-export function fillAllInputs(config: FakerConfig, locale?: string) {
+export function fillAllInputs(config: FakerConfig, locale?: string, values?: Record<string, string>) {
 	// Cascade: explicit locale → detectPageLocale() → "en"
 	const resolvedLocale = locale ?? detectPageLocale();
 
 	// Fill main document
-	const result = fillDocument(document, config, resolvedLocale);
+	const result = fillDocument(document, config, resolvedLocale, values);
 
 	// Fill same-origin iframes
 	const iframeDocs = getAccessibleFrameDocs(document);
 	for (const iframeDoc of iframeDocs) {
-		const iframeResult = fillDocument(iframeDoc, config, resolvedLocale);
+		const iframeResult = fillDocument(iframeDoc, config, resolvedLocale, values);
 		// Merge iframe stats into main result for the summary
 		result.totalSelects += iframeResult.totalSelects;
 		result.filled += iframeResult.filled;
@@ -1075,7 +1089,7 @@ export default defineContentScript({
 		// Listen popup messages
 		browser.runtime.onMessage.addListener((message) => {
 			if (message.type === "FILL_FORM") {
-				fillAllInputs(message.config, message.locale);
+				fillAllInputs(message.config, message.locale, message.values);
 			}
 		});
 		// Count forms' inputs

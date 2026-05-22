@@ -29,6 +29,13 @@
   let inputCount = $state(0);
   let showAbout = $state(false);
 
+  // Cached preview values so Fill uses the SAME values the user saw in Preview tab
+  let previewValues = $state<Record<string, string> | null>(null);
+
+  function onPreviewReady(values: Record<string, string>) {
+    previewValues = values;
+  }
+
   const collapsedGroups = $state<Record<FieldGroup, boolean>>({
     personal: false,
     contact: false,
@@ -116,8 +123,11 @@
         type: "FILL_FORM",
         config,
         locale,
+        values: previewValues ?? undefined,
       });
     }
+    // Clear cached values after fill so subsequent fills regenerate fresh
+    previewValues = null;
   }
 </script>
 
@@ -136,7 +146,7 @@
         {onUpdateWeight}
       />
     {:else if activeTab === "preview"}
-      <PreviewTab {locale} {customValues} />
+      <PreviewTab {locale} {customValues} {onPreviewReady} />
     {:else if activeTab === "per-fill"}
       <div class="placeholder-view">
         <div class="placeholder-icon">✏️</div>
