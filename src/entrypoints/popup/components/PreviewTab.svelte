@@ -8,11 +8,9 @@
   let {
     locale,
     customValues,
-    onPreviewReady = (_values: Record<string, string>) => {},
   }: {
     locale: string;
     customValues: Record<string, CustomValueWeight[]>;
-    onPreviewReady?: (values: Record<string, string>) => void;
   } = $props();
 
   type PreviewState = "loading" | "loaded" | "empty" | "error";
@@ -85,15 +83,6 @@
         } else {
           entries = result.entries;
           state = "loaded";
-          // Build values map: element id → generated value
-          // These will be sent with FILL_FORM so the fill uses the same values
-          const values: Record<string, string> = {};
-          for (const entry of entries) {
-            if (entry.value) {
-              values[entry.id] = entry.value;
-            }
-          }
-          onPreviewReady(values);
         }
       } else {
         state = "error";

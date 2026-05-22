@@ -19,6 +19,14 @@ import { buildGroups, type FieldGroup, type SemanticField } from "@/lib/semantic
 import { detectPageLocale, loadLocale } from "@/lib/locales";
 import type { PreviewEntry } from "@/lib/types";
 
+/**
+ * Cached preview values — set when PREVIEW_FILL is called, consumed by
+ * fillDocument() on the next FILL_FORM. This ensures the fill uses the
+ * EXACT same values the user saw in the Preview tab, without relying on
+ * the popup to pass them back through the message.
+ */
+let previewValueCache: Record<string, string> | null = null;
+
 // Since the modern javascript frameworks detect changes through events
 // it's not as simple as just input.value = 'something'
 function fillInput(
@@ -779,7 +787,6 @@ export function fillDocument(
 	doc: Document,
 	config: FakerConfig,
 	locale: string,
-	values?: Record<string, string>,
 ): FillDocumentResult {
 	// --- Radio / Checkbox pass ---
 	// Process these FIRST so that conditional fields (revealed by radio/checkbox selection)
@@ -791,15 +798,15 @@ export function fillDocument(
 	// Returns pre-computed values for every field group.
 	const { groups } = detectAndGenerate(doc, config, locale);
 
-	// Override values with preview-cached ones if provided.
-	// Ensures preview shows the SAME values that will be filled.
-	if (values) {
+	// Override values with preview-cached ones — set by PREVIEW_FILL handler.
+	// This ensures the fill uses the EXACT values the user saw in the Preview tab.
+	if (previewValueCache) {
 		for (const fvg of groups) {
 			const key = fvg.group.type === "confirm-pair"
 				? fvg.group.primary.id
 				: fvg.group.field.id;
-			if (values[key] !== undefined) {
-				fvg.value = values[key];
+			if (previewValueCache[key] !== undefined) {
+				fvg.value = previewValueCache[key];
 			}
 		}
 	}
@@ -1027,17 +1034,17 @@ export function fillDocument(
 	};
 }
 
-export function fillAllInputs(config: FakerConfig, locale?: string, values?: Record<string, string>) {
+export function fillAllInputs(config: FakerConfig, locale?: string) {
 	// Cascade: explicit locale → detectPageLocale() → "en"
 	const resolvedLocale = locale ?? detectPageLocale();
 
 	// Fill main document
-	const result = fillDocument(document, config, resolvedLocale, values);
+	const result = fillDocument(document, config, resolvedLocale);
 
 	// Fill same-origin iframes
 	const iframeDocs = getAccessibleFrameDocs(document);
 	for (const iframeDoc of iframeDocs) {
-		const iframeResult = fillDocument(iframeDoc, config, resolvedLocale, values);
+		const iframeResult = fillDocument(iframeDoc, config, resolvedLocale);
 		// Merge iframe stats into main result for the summary
 		result.totalSelects += iframeResult.totalSelects;
 		result.filled += iframeResult.filled;
@@ -1046,6 +1053,9 @@ export function fillAllInputs(config: FakerConfig, locale?: string, values?: Rec
 		result.radioGroups += iframeResult.radioGroups;
 		result.checkboxGroups += iframeResult.checkboxGroups;
 	}
+
+	// Consume the preview cache — all documents have been filled
+	previewValueCache = null;
 
 	// Log summary statistics
 	console.debug("[fake-my-forms] fillAllInputs summary:", {
@@ -1090,7 +1100,7 @@ export default defineContentScript({
 		browser.runtime.onMessage.addListener((message) => {
 			if (message.type === "FILL_FORM") {
 				try {
-					fillAllInputs(message.config, message.locale, message.values);
+					fillAllInputs(message.config, message.locale);
 				} catch (err) {
 					console.error("[fake-my-forms] fillAllInputs error:", err);
 				}
@@ -1120,6 +1130,13 @@ export default defineContentScript({
 						message.locale,
 					);
 					allEntries = allEntries.concat(iframeEntries);
+				}
+				// Cache values so the next FILL_FORM uses the same values
+				previewValueCache = {};
+				for (const entry of allEntries) {
+					if (entry.value) {
+						previewValueCache[entry.id] = entry.value;
+					}
 				}
 				return Promise.resolve({ entries: allEntries });
 			}
