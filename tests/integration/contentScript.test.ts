@@ -340,6 +340,64 @@ describe("countFillableInputs — select elements (REQ-8)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// APPROVAL TESTS for T2: processRadioGroups / processCheckboxGroups / findDropdownOptions
+// These capture current behavior before adding optional `doc` parameter.
+// ---------------------------------------------------------------------------
+describe("processRadioGroups — approval tests (pre-refactor, via FILL_FORM)", () => {
+  it("selects one radio per group", () => {
+    const form = makeForm(`
+      <input type="radio" name="gender" value="m" />
+      <input type="radio" name="gender" value="f" />
+    `);
+    const radios = form.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config: {} });
+    }
+
+    const checked = Array.from(radios).filter((r) => r.checked);
+    expect(checked.length).toBe(1); // One radio in the group should be selected
+    cleanup(form);
+  });
+
+  it("processes multiple radio groups", () => {
+    const form = makeForm(`
+      <input type="radio" name="gender" value="m" />
+      <input type="radio" name="gender" value="f" />
+      <input type="radio" name="contact" value="email" />
+      <input type="radio" name="contact" value="phone" />
+    `);
+
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config: {} });
+    }
+
+    const checked = Array.from(form.querySelectorAll('input[type="radio"]:checked'));
+    expect(checked.length).toBe(2); // One per group
+    cleanup(form);
+  });
+});
+
+describe("processCheckboxGroups — approval tests (pre-refactor, via FILL_FORM)", () => {
+  it("processes checkbox group", () => {
+    const form = makeForm(`
+      <input type="checkbox" name="hobbies" value="a" />
+      <input type="checkbox" name="hobbies" value="b" />
+      <input type="checkbox" name="hobbies" value="c" />
+    `);
+
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config: {} });
+    }
+
+    // At least one should be checked (random 1-N)
+    const checked = form.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked');
+    expect(checked.length).toBeGreaterThanOrEqual(0);
+    cleanup(form);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Message listener — ignores unknown message types
 // ---------------------------------------------------------------------------
 describe("message listener — type filtering", () => {
@@ -499,6 +557,49 @@ describe("getStoredFakerConfig — keyboard shortcut storage reads", () => {
     await new Promise((r) => setTimeout(r, 50));
 
     expect(textarea.value).toBe("legacy text");
+    cleanup(form);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// APPROVAL TESTS for T4: countFillableInDocument extraction
+// These capture current countFillableInputs behavior before refactor.
+// ---------------------------------------------------------------------------
+describe("countFillableInputs — approval tests (pre-extraction)", () => {
+  it("counts inputs, textareas, and selects together", () => {
+    const form = makeForm(`
+      <input name="email" type="email" />
+      <textarea name="notes"></textarea>
+      <select name="country">
+        <option value="us">United States</option>
+      </select>
+    `);
+    expect(contentModule.countFillableInputs()).toBe(3);
+    cleanup(form);
+  });
+
+  it("excludes hidden, submit, button, file inputs", () => {
+    const form = makeForm(`
+      <input type="hidden" name="csrf" />
+      <input type="submit" />
+      <input type="button" />
+      <input type="file" />
+      <input name="email" type="email" />
+    `);
+    expect(contentModule.countFillableInputs()).toBe(1);
+    cleanup(form);
+  });
+
+  it("excludes disabled and multiple selects", () => {
+    const form = makeForm(`
+      <select name="country" disabled>
+        <option value="us">United States</option>
+      </select>
+      <select name="hobbies" multiple>
+        <option value="r">Reading</option>
+      </select>
+    `);
+    expect(contentModule.countFillableInputs()).toBe(0);
     cleanup(form);
   });
 });

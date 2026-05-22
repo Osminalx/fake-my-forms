@@ -1087,8 +1087,198 @@ describe("backward compatibility — no locale = English-only", () => {
     expect(detectFieldType(makeInput({ placeholder: "apellido" }))).toBe("unknown");
   });
 
-  it("English confirm pattern works for detectSelectFieldType without locale", () => {
+	it("English confirm pattern works for detectSelectFieldType without locale", () => {
     const select = makeSelect({ ariaLabel: "Country" });
     expect(detectSelectFieldType(select)).toBe("country");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// APPROVAL TESTS for T1: getLabelText, detectRadioElement, detectCheckboxElement
+// These capture current behavior before adding optional `doc` parameter.
+// ---------------------------------------------------------------------------
+import {
+  getLabelText,
+  detectRadioElement,
+  detectCheckboxElement,
+} from "../../src/lib/fieldDetector";
+
+describe("getLabelText — approval tests (pre-refactor)", () => {
+  function makeInputInDOM(setup: (container: HTMLDivElement) => HTMLInputElement): {
+    input: HTMLInputElement;
+    cleanup: () => void;
+  } {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const input = setup(container);
+    return {
+      input,
+      cleanup: () => document.body.removeChild(container),
+    };
+  }
+
+  it("returns aria-label text", () => {
+    const input = document.createElement("input");
+    input.setAttribute("aria-label", "Email address");
+    expect(getLabelText(input)).toBe("Email address");
+  });
+
+  it("returns text from aria-labelledby element", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <span id="lbl-1">Full Name</span>
+        <input aria-labelledby="lbl-1" />
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(getLabelText(input)).toBe("Full Name");
+    cleanup();
+  });
+
+  it("returns text from label[for] element", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <label for="inp-1">First name</label>
+        <input id="inp-1" />
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(getLabelText(input)).toBe("First name");
+    cleanup();
+  });
+
+  it("returns text from wrapping label", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `<label>Phone number<input /></label>`;
+      return container.querySelector("input")!;
+    });
+    expect(getLabelText(input)).toBe("Phone number");
+    cleanup();
+  });
+
+  it("returns text from aria-describedby element when no other label", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <span id="desc-1">Company name</span>
+        <input aria-describedby="desc-1" />
+      `;
+      return container.querySelector("input")!;
+    });
+    expect(getLabelText(input)).toBe("Company name");
+    cleanup();
+  });
+
+  it("returns empty string when no label is associated", () => {
+    const input = document.createElement("input");
+    input.name = "plain";
+    expect(getLabelText(input)).toBe("");
+  });
+
+  it("still works when called with explicit doc = document", () => {
+    const { input, cleanup } = makeInputInDOM((container) => {
+      container.innerHTML = `
+        <label for="inp-doc">Explicit Doc</label>
+        <input id="inp-doc" />
+      `;
+      return container.querySelector("input")!;
+    });
+    // Passing document explicitly: should find the label via doc.getElementById
+    expect(getLabelText(input, document)).toBe("Explicit Doc");
+    cleanup();
+  });
+});
+
+describe("detectRadioElement — approval tests (pre-refactor)", () => {
+  function makeInDOM(html: string): HTMLInputElement[] {
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const radios = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
+    // Return radios with a cleanup function attached
+    (radios as unknown as { _cleanup: () => void })._cleanup = () =>
+      document.body.removeChild(container);
+    return radios;
+  }
+
+  function cleanup(radios: HTMLInputElement[]) {
+    const c = (radios as unknown as { _cleanup?: () => void })._cleanup;
+    if (c) c();
+  }
+
+  it("returns radio group by name attribute", () => {
+    const radios = makeInDOM(`
+      <input type="radio" name="gender" value="m" />
+      <input type="radio" name="gender" value="f" />
+    `);
+    const result = detectRadioElement(radios[0]);
+    expect(result).toHaveLength(2);
+    cleanup(radios);
+  });
+
+  it("returns single radio when no name match", () => {
+    const radios = makeInDOM(`
+      <input type="radio" name="alone" value="x" />
+    `);
+    const result = detectRadioElement(radios[0]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(radios[0]);
+    cleanup(radios);
+  });
+
+  it("works with explicit doc = document", () => {
+    const radios = makeInDOM(`
+      <input type="radio" name="test-doc" value="a" />
+      <input type="radio" name="test-doc" value="b" />
+    `);
+    const result = detectRadioElement(radios[0], document);
+    expect(result).toHaveLength(2);
+    cleanup(radios);
+  });
+});
+
+describe("detectCheckboxElement — approval tests (pre-refactor)", () => {
+  function makeInDOM(html: string): HTMLInputElement[] {
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const cbs = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+    (cbs as unknown as { _cleanup: () => void })._cleanup = () =>
+      document.body.removeChild(container);
+    return cbs;
+  }
+
+  function cleanup(cbs: HTMLInputElement[]) {
+    const c = (cbs as unknown as { _cleanup?: () => void })._cleanup;
+    if (c) c();
+  }
+
+  it("returns checkbox group by name attribute", () => {
+    const cbs = makeInDOM(`
+      <input type="checkbox" name="hobbies" value="a" />
+      <input type="checkbox" name="hobbies" value="b" />
+    `);
+    const result = detectCheckboxElement(cbs[0]);
+    expect(result).toHaveLength(2);
+    cleanup(cbs);
+  });
+
+  it("returns single checkbox when no name match", () => {
+    const cbs = makeInDOM(`
+      <input type="checkbox" name="alone" value="x" />
+    `);
+    const result = detectCheckboxElement(cbs[0]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBe(cbs[0]);
+    cleanup(cbs);
+  });
+
+  it("works with explicit doc = document", () => {
+    const cbs = makeInDOM(`
+      <input type="checkbox" name="test-doc" value="a" />
+      <input type="checkbox" name="test-doc" value="b" />
+    `);
+    const result = detectCheckboxElement(cbs[0], document);
+    expect(result).toHaveLength(2);
+    cleanup(cbs);
   });
 });

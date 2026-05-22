@@ -44,6 +44,100 @@ function makeSelect(options: { value: string; text: string }[], attrs: string = 
 }
 
 // ---------------------------------------------------------------------------
+// APPROVAL TESTS for T3: fillDocument extraction from fillAllInputs
+// These capture current behavior before the refactor.
+// ---------------------------------------------------------------------------
+import { detectPageLocale } from "../../src/lib/locales";
+
+describe("fillAllInputs — approval tests (pre-extraction)", () => {
+  function makeForm(html: string): HTMLFormElement {
+    const form = document.createElement("form");
+    form.innerHTML = html;
+    document.body.appendChild(form);
+    return form;
+  }
+
+  function cleanup(form: HTMLFormElement) {
+    document.body.removeChild(form);
+  }
+
+  it("fills text inputs with matching config", () => {
+    const form = makeForm(`
+      <input name="email" type="email" />
+      <input name="firstName" />
+    `);
+    const email = form.querySelector<HTMLInputElement>('[name="email"]')!;
+    const firstName = form.querySelector<HTMLInputElement>('[name="firstName"]')!;
+
+    const config = {
+      email: { enabled: true, probability: 100, customValues: [{ value: "a@b.com", weight: 100 }] },
+      firstName: { enabled: true, probability: 100, customValues: [{ value: "Alice", weight: 100 }] },
+    };
+    fillAllInputs(config);
+
+    expect(email.value).toBe("a@b.com");
+    expect(firstName.value).toBe("Alice");
+    cleanup(form);
+  });
+
+  it("fills native selects with matching option text", () => {
+    const form = makeForm(`
+      <select name="country">
+        <option value="us">United States</option>
+        <option value="ca">Canada</option>
+      </select>
+    `);
+    const select = form.querySelector<HTMLSelectElement>("select")!;
+    const config = {
+      country: { enabled: true, probability: 100, customValues: [{ value: "United States", weight: 100 }] },
+    };
+    fillAllInputs(config);
+    expect(select.value).toBe("us");
+    cleanup(form);
+  });
+
+  it("fills textarea with matching config (text fieldType)", () => {
+    const form = makeForm(`<textarea name="notes"></textarea>`);
+    const textarea = form.querySelector<HTMLTextAreaElement>("textarea")!;
+    fillAllInputs({ text: { enabled: true, probability: 100, customValues: [{ value: "some notes", weight: 100 }] } });
+    expect(textarea.value).toBe("some notes");
+    cleanup(form);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// APPROVAL TESTS for T5: getAccessibleFrameDocs
+// ---------------------------------------------------------------------------
+const { fillDocument, countFillableInDocument, getAccessibleFrameDocs } = (await import(
+  "../../src/entrypoints/content.ts"
+)) as {
+  fillDocument: typeof import("../../src/entrypoints/content.ts").fillDocument;
+  countFillableInDocument: typeof import("../../src/entrypoints/content.ts").countFillableInDocument;
+  getAccessibleFrameDocs: typeof import("../../src/entrypoints/content.ts").getAccessibleFrameDocs;
+};
+
+describe("getAccessibleFrameDocs", () => {
+  it("returns empty array when document has no iframes", () => {
+    document.body.innerHTML = "<div>no iframes</div>";
+    const result = getAccessibleFrameDocs(document);
+    expect(result).toEqual([]);
+  });
+
+  it("returns empty array when no iframes present", () => {
+    const container = document.createElement("div");
+    container.innerHTML = '<span>no iframe here</span>';
+    const result = getAccessibleFrameDocs(document);
+    expect(result).toEqual([]);
+  });
+
+  it("catches cross-origin errors silently", () => {
+    document.body.innerHTML = "";
+    const result = getAccessibleFrameDocs(document);
+    expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Task 8: fillSelect unit tests
 // ---------------------------------------------------------------------------
 describe("fillSelect", () => {

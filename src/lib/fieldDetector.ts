@@ -62,11 +62,12 @@ export function findGroupContainer(
 
 export function detectRadioElement(
 	element: HTMLInputElement,
+	doc: Document = document,
 ): HTMLInputElement[] {
 	const name = element.name;
 	if (name) {
 		return Array.from(
-			document.querySelectorAll<HTMLInputElement>(
+			doc.querySelectorAll<HTMLInputElement>(
 				`input[type="radio"][name="${name}"]`,
 			),
 		);
@@ -78,11 +79,12 @@ export function detectRadioElement(
 
 export function detectCheckboxElement(
 	element: HTMLInputElement,
+	doc: Document = document,
 ): HTMLInputElement[] {
 	const name = element.name;
 	if (name) {
 		return Array.from(
-			document.querySelectorAll<HTMLInputElement>(
+			doc.querySelectorAll<HTMLInputElement>(
 				`input[type="checkbox"][name="${name}"]`,
 			),
 		);
@@ -108,7 +110,8 @@ export function detectSelectElementType(
 	element: Element,
 ): SelectElementType | null {
 	// Native HTML select element
-	if (element instanceof HTMLSelectElement) {
+	// tagName for cross-document safety (Firefox Xray wrappers)
+	if (element.tagName === "SELECT") {
 		return "native-select";
 	}
 
@@ -209,6 +212,7 @@ const AUTOCOMPLETE_TOKENS: Record<string, FieldType> = {
  */
 export function getLabelText(
 	input: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
+	doc: Document = document,
 ): string {
 	let labelText = "";
 
@@ -219,13 +223,13 @@ export function getLabelText(
 	// 2. aria-labelledby (reference to another element)
 	const ariaLabelledBy = input.getAttribute("aria-labelledby");
 	if (ariaLabelledBy) {
-		const labelledElement = document.getElementById(ariaLabelledBy);
+		const labelledElement = doc.getElementById(ariaLabelledBy);
 		if (labelledElement) return labelledElement.textContent ?? "";
 	}
 
 	// 3. Label associated via for=id
 	if (input.id) {
-		const labelFor = document.querySelector(
+		const labelFor = doc.querySelector(
 			`label[for="${CSS.escape(input.id)}"]`,
 		);
 		if (labelFor) {
@@ -244,7 +248,7 @@ export function getLabelText(
 	// 5. aria-describedby (additional descriptions)
 	const ariaDescribedBy = input.getAttribute("aria-describedby");
 	if (ariaDescribedBy) {
-		const describedElement = document.getElementById(ariaDescribedBy);
+		const describedElement = doc.getElementById(ariaDescribedBy);
 		if (describedElement) return describedElement.textContent ?? "";
 	}
 
@@ -424,7 +428,8 @@ export function detectFieldType(
 
 	// 6. FALLBACK: element type
 	// Textareas are always text entry fields — fill with lorem if nothing else matches
-	if (input instanceof HTMLTextAreaElement) return "text";
+	// tagName for cross-document safety (Firefox Xray wrappers)
+	if (input.tagName === "TEXTAREA") return "text";
 
 	// IMPORTANT: we return "unknown" (no fill) instead of "text" (lorem ipsum)
 	// to avoid incorrect filling when we cannot detect the type
@@ -466,7 +471,8 @@ export function detectSelectFieldType(
 	};
 
 	// For native select elements, use the original logic path
-	if (element instanceof HTMLSelectElement) {
+	// tagName for cross-document safety (Firefox Xray wrappers)
+	if (element.tagName === "SELECT") {
 		// 1. HIGH PRIORITY: Autocomplete token
 		const autocompleteType = parseAutocompleteValue(element);
 		if (autocompleteType) return autocompleteType;

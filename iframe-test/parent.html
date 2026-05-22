@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Iframe Test — Parent Form</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: Inter, Arial, sans-serif;
+        margin: 0; padding: 24px;
+        background: #f5f7fb; color: #111827;
+      }
+      .card {
+        max-width: 760px; margin: 0 auto 24px;
+        background: #fff; border: 1px solid #e5e7eb;
+        border-radius: 12px; padding: 20px;
+        box-shadow: 0 8px 24px rgba(0,0,0,.06);
+      }
+      h1 { margin: 0 0 4px; font-size: 20px; }
+      h2 { margin: 0 0 4px; font-size: 15px; color: #374151; }
+      p  { margin: 0 0 16px; color: #4b5563; font-size: 14px; }
+      .badge {
+        display: inline-block; font-size: 11px; font-weight: 700;
+        letter-spacing: .05em; text-transform: uppercase;
+        color: #6b7280; background: #f3f4f6;
+        border: 1px solid #e5e7eb; border-radius: 4px;
+        padding: 2px 7px; margin-bottom: 10px;
+      }
+      .badge.iframe {
+        color: #92400e; background: #fef3c7; border-color: #f59e0b;
+      }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .field { display: flex; flex-direction: column; gap: 6px; }
+      .field.full { grid-column: 1 / -1; }
+      label { font-size: 13px; font-weight: 600; }
+      input, select, textarea {
+        border: 1px solid #d1d5db; border-radius: 8px;
+        padding: 10px 12px; font-size: 14px; background: #fff;
+        color: #111827; width: 100%; box-sizing: border-box;
+      }
+      iframe {
+        width: 100%; border: 2px dashed #f59e0b;
+        border-radius: 8px; margin-top: 12px;
+        background: #fffbeb;
+      }
+      .iframe-label {
+        display: flex; align-items: center; gap: 8px;
+        margin: 16px 0 4px; font-size: 13px; font-weight: 600;
+        color: #92400e;
+      }
+      .hint { font-size: 11px; color: #9ca3af; font-family: monospace; }
+    </style>
+  </head>
+  <body>
+
+    <!-- ===================================================================
+         PARENT FORM — estos campos se llenan bien con Alt+Shift+F
+    ==================================================================== -->
+    <main class="card">
+      <h1>📋 Iframe Test — Parent Form</h1>
+      <p>
+        Presioná <strong>Alt+Shift+F</strong>.
+        Los campos de este formulario se llenan.
+        Los del <strong>iframe</strong> (abajo) <em>no</em>.
+      </p>
+      <span class="badge">Parent — estos se llenan</span>
+
+      <form class="grid" autocomplete="on">
+        <div class="field">
+          <label for="firstName">First name</label>
+          <input id="firstName" name="firstName" autocomplete="given-name" />
+        </div>
+        <div class="field">
+          <label for="lastName">Last name</label>
+          <input id="lastName" name="lastName" autocomplete="family-name" />
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email" />
+        </div>
+        <div class="field">
+          <label for="phone">Phone</label>
+          <input id="phone" name="phone" type="tel" autocomplete="tel" />
+        </div>
+        <div class="field full">
+          <label for="address">Address</label>
+          <input id="address" name="address" autocomplete="street-address" />
+        </div>
+        <div class="field">
+          <label for="city">City</label>
+          <input id="city" name="city" autocomplete="address-level2" />
+        </div>
+        <div class="field">
+          <label for="state">State</label>
+          <input id="state" name="state" autocomplete="address-level1" />
+        </div>
+        <div class="field">
+          <label for="zip">ZIP code</label>
+          <input id="zip" name="zip" autocomplete="postal-code" />
+        </div>
+      </form>
+
+      <!-- ================================================================
+           IFRAME — mismo origen, mismo dominio, mismo puerto
+           Estos campos NO se llenan con el content script actual
+      ================================================================ -->
+      <div class="iframe-label">
+        ⬇️ Iframe (mismo origen) — estos NO se llenan
+      </div>
+      <iframe
+        src="child.html"
+        name="child-frame"
+        title="Child form"
+        height="420"
+      ></iframe>
+
+      <p class="hint" style="margin-top:12px">
+        El content script usa <code>document.querySelectorAll()</code> que
+        solo ve el documento principal. Los campos dentro del iframe
+        quedan sin llenar.
+      </p>
+    </main>
+  </body>
+</html>

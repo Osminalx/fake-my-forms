@@ -185,9 +185,10 @@ export function validateSelectValue(
 ): { isValid: boolean; matchedOption?: string; availableOptions: string[] } {
 	let availableOptions: string[] = [];
 
-	if (element instanceof HTMLSelectElement) {
+	// tagName for cross-document safety (Firefox Xray wrappers)
+	if (element.tagName === "SELECT") {
 		// Native select: scan options - include both text and value
-		availableOptions = Array.from(element.options).map(
+		availableOptions = Array.from((element as HTMLSelectElement).options).map(
 			(o) => o.text || o.value,
 		);
 	} else {
@@ -217,7 +218,7 @@ export function validateSelectValue(
 	// Check if search matches any option (text or value for native selects)
 	let matched: string | undefined;
 
-	if (element instanceof HTMLSelectElement) {
+	if (element.tagName === "SELECT") {
 		// For native selects, also check option.values
 		for (const option of Array.from(element.options)) {
 			const optionText = (option.text ?? "").toLowerCase();

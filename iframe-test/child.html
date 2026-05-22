@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Iframe Child Form</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        font-family: Inter, Arial, sans-serif;
+        margin: 0; padding: 16px;
+        background: #fffbeb; color: #111827;
+      }
+      h2 { margin: 0 0 4px; font-size: 15px; color: #92400e; }
+      p  { margin: 0 0 12px; color: #b45309; font-size: 13px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .field { display: flex; flex-direction: column; gap: 4px; }
+      .field.full { grid-column: 1 / -1; }
+      label { font-size: 12px; font-weight: 600; }
+      input, select, textarea {
+        border: 1px solid #d1d5db; border-radius: 6px;
+        padding: 8px 10px; font-size: 13px; background: #fff;
+        color: #111827; width: 100%; box-sizing: border-box;
+      }
+      .hint { font-size: 10px; color: #9ca3af; font-family: monospace; }
+    </style>
+  </head>
+  <body>
+    <h2>🔶 Child form (inside iframe)</h2>
+    <p>Estos campos existen en un <code>document</code> separado.</p>
+    <span class="hint">same-origin iframe</span>
+
+    <form class="grid" autocomplete="on">
+      <div class="field">
+        <label for="company">Company</label>
+        <input id="company" name="company" autocomplete="organization" />
+        <span class="hint">autocomplete="organization"</span>
+      </div>
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" />
+        <span class="hint">autocomplete="username"</span>
+      </div>
+      <div class="field">
+        <label for="cc-name">Cardholder name</label>
+        <input id="cc-name" name="ccname" autocomplete="cc-name" />
+        <span class="hint">autocomplete="cc-name"</span>
+      </div>
+      <div class="field">
+        <label for="cc-exp">Card expiry</label>
+        <input id="cc-exp" name="ccexp" autocomplete="cc-exp" placeholder="MM/YY" />
+        <span class="hint">autocomplete="cc-exp"</span>
+      </div>
+      <div class="field full">
+        <label for="notes">Additional notes</label>
+        <textarea id="notes" name="notes" placeholder="Anything else?"></textarea>
+        <span class="hint">textarea con label</span>
+      </div>
+    </form>
+  </body>
+</html>
