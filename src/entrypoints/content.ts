@@ -68,12 +68,8 @@ export function fillInput(
 	input: HTMLInputElement | HTMLTextAreaElement,
 	value: string,
 ) {
-	// Skip disabled, readonly, or fieldset-disabled elements
+	// Skip disabled, readonly, fieldset-disabled, or file inputs
 	if (!isElementFillable(input)) return;
-
-	// File inputs cannot be set programmatically — browsers throw InvalidStateError
-	// Use tagName instead of instanceof for cross-document safety (Firefox Xray wrappers)
-	if (input.tagName === "INPUT" && input.type === "file") return;
 
 	// Use the correct prototype setter based on element type
 	const prototype =
@@ -457,7 +453,10 @@ export function handleFrameworkDropdown(
  * Used as fallback when fieldType is unknown and no semantic value can be generated.
  */
 function fillSelectRandom(select: HTMLSelectElement): boolean {
-	if (!isElementFillable(select)) return false;
+	if (!isElementFillable(select)) {
+		console.debug("[fake-my-forms] Skipped disabled select", select);
+		return false;
+	}
 	if (select.multiple) return false;
 	const validOptions = Array.from(select.options).filter(
 		(o) => !o.disabled && o.value !== "",
