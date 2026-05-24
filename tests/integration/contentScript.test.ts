@@ -784,6 +784,195 @@ describe("countFillableInputs — approval tests (pre-extraction)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// countFillableInputs — disabled/readonly filtering (T4)
+// ---------------------------------------------------------------------------
+describe("countFillableInputs — disabled/readonly filtering (T4)", () => {
+  it("excludes disabled input", () => {
+    const form = makeForm(`
+      <input type="text" name="normal" />
+      <input type="text" name="blocked" disabled />
+    `);
+    expect(contentModule.countFillableInputs()).toBe(1);
+    cleanup(form);
+  });
+
+  it("excludes readonly input (attribute)", () => {
+    const form = makeForm(`
+      <input type="text" name="normal" />
+      <input type="text" name="blocked" readonly />
+    `);
+    expect(contentModule.countFillableInputs()).toBe(1);
+    cleanup(form);
+  });
+
+  it("excludes input inside fieldset[disabled]", () => {
+    const form = makeForm(`
+      <fieldset disabled>
+        <input type="text" name="inside" />
+      </fieldset>
+      <input type="text" name="outside" />
+    `);
+    expect(contentModule.countFillableInputs()).toBe(1);
+    cleanup(form);
+  });
+
+  it("excludes readonly textarea", () => {
+    const form = makeForm(`
+      <textarea name="blocked" readonly></textarea>
+      <input type="text" name="normal" />
+    `);
+    expect(contentModule.countFillableInputs()).toBe(1);
+    cleanup(form);
+  });
+
+  it("excludes disabled select", () => {
+    const form = makeForm(`
+      <select name="blocked" disabled>
+        <option value="a">A</option>
+      </select>
+      <input type="text" name="normal" />
+    `);
+    expect(contentModule.countFillableInputs()).toBe(1);
+    cleanup(form);
+  });
+
+  it("counts only normal fillable elements in mixed scenario", () => {
+    const form = makeForm(`
+      <input type="text" name="a" />
+      <input type="text" name="b" disabled />
+      <input type="text" name="c" readonly />
+      <textarea name="d"></textarea>
+      <select name="e">
+        <option value="x">X</option>
+      </select>
+    `);
+    expect(contentModule.countFillableInputs()).toBe(3); // a, d, e
+    cleanup(form);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FILL_FORM — disabled/readonly guard behavior (T6)
+// ---------------------------------------------------------------------------
+describe("FILL_FORM — disabled/readonly guard behavior (T6)", () => {
+  it("does NOT fill a disabled input", () => {
+    const form = makeForm('<input type="text" name="firstName" disabled />');
+    const input = form.querySelector<HTMLInputElement>("input")!;
+    const prevValue = input.value;
+
+    const config = {
+      firstName: { enabled: true, probability: 100, customValues: [{ value: "should-not-appear", weight: 100 }] },
+    };
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config });
+    }
+
+    expect(input.value).toBe(prevValue);
+    cleanup(form);
+  });
+
+  it("does NOT fill a readonly input (attribute)", () => {
+    const form = makeForm('<input type="text" name="firstName" readonly />');
+    const input = form.querySelector<HTMLInputElement>("input")!;
+    const prevValue = input.value;
+
+    const config = {
+      firstName: { enabled: true, probability: 100, customValues: [{ value: "should-not-appear", weight: 100 }] },
+    };
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config });
+    }
+
+    expect(input.value).toBe(prevValue);
+    cleanup(form);
+  });
+
+  it("does NOT fill input inside fieldset[disabled]", () => {
+    const form = makeForm('<fieldset disabled><input type="text" name="firstName" /></fieldset>');
+    const input = form.querySelector<HTMLInputElement>("input")!;
+    const prevValue = input.value;
+
+    const config = {
+      firstName: { enabled: true, probability: 100, customValues: [{ value: "should-not-appear", weight: 100 }] },
+    };
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config });
+    }
+
+    expect(input.value).toBe(prevValue);
+    cleanup(form);
+  });
+
+  it("fills only fillable inputs in a mixed form", () => {
+    const form = makeForm(`
+      <input type="text" name="firstName" />
+      <input type="text" name="lastName" disabled />
+      <input type="text" name="email" readonly />
+    `);
+    const firstName = form.querySelector<HTMLInputElement>('[name="firstName"]')!;
+    const lastName = form.querySelector<HTMLInputElement>('[name="lastName"]')!;
+    const email = form.querySelector<HTMLInputElement>('[name="email"]')!;
+
+    const config = {
+      firstName: { enabled: true, probability: 100, customValues: [{ value: "Alice", weight: 100 }] },
+      lastName: { enabled: true, probability: 100, customValues: [{ value: "should-not", weight: 100 }] },
+      email: { enabled: true, probability: 100, customValues: [{ value: "should-not", weight: 100 }] },
+    };
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config });
+    }
+
+    expect(firstName.value).toBe("Alice");
+    expect(lastName.value).toBe(""); // unchanged
+    expect(email.value).toBe(""); // unchanged
+    cleanup(form);
+  });
+
+  it("still fills enabled inputs (regression)", () => {
+    const form = makeForm('<input type="text" name="firstName" />');
+    const input = form.querySelector<HTMLInputElement>("input")!;
+
+    const config = {
+      firstName: { enabled: true, probability: 100, customValues: [{ value: "Alice", weight: 100 }] },
+    };
+    for (const listener of messageListeners) {
+      listener({ type: "FILL_FORM", config });
+    }
+
+    expect(input.value).toBe("Alice");
+    cleanup(form);
+  });
+
+  it("GET_INPUT_STATS returns correct count excluding disabled/readonly", () => {
+    const form = makeForm(`
+      <input type="text" name="a" />
+      <input type="text" name="b" disabled />
+      <input type="text" name="c" readonly />
+    `);
+
+    let count = 0;
+    for (const listener of messageListeners) {
+      const result = listener({ type: "GET_INPUT_STATS" });
+      if (result instanceof Promise) {
+        result.then((r: unknown) => {
+          if (r && typeof r === "object" && "count" in r) {
+            count = (r as { count: number }).count;
+          }
+        });
+      }
+    }
+
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        expect(count).toBe(1); // only input "a"
+        cleanup(form);
+        resolve();
+      }, 10);
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // fillSelect — select element support
 // ---------------------------------------------------------------------------
 describe("fillSelect (via FILL_FORM message)", () => {

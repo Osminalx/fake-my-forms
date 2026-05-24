@@ -27,15 +27,49 @@ import type { PreviewEntry } from "@/lib/types";
  */
 let previewValueCache: Record<string, string> | null = null;
 
+/**
+ * Returns `true` if `el` CAN be filled (not disabled, not readonly).
+ *
+ * Catches via `:disabled`:
+ *   - `disabled` attribute:       `<input disabled>`
+ *   - `disabled` JS property:     `el.disabled = true`
+ *   - fieldset[disabled] descent: `<fieldset disabled><input></fieldset>`
+ *
+ * Catches via `.readOnly`:
+ *   - `readonly` attribute:       `<input readonly>`
+ *   - `.readOnly` JS property:    `el.readOnly = true` (programmatic)
+ *
+ * Does NOT handle:
+ *   - `aria-disabled`              (framework dropdowns only — handled in
+ *                                   handleFrameworkDropdown())
+ *   - `<div role="combobox">`      (no disabled/readOnly DOM properties)
+ */
+export function isElementFillable(el: Element): boolean {
+  // File inputs cannot be set programmatically — browsers throw InvalidStateError
+  if (el.tagName === "INPUT" && (el as HTMLInputElement).type === "file") return false;
+
+  // :disabled catches: disabled attribute, disabled property, fieldset[disabled] descendants
+  // Note: `closest('fieldset[disabled]')` is a supplementary check for
+  // environments (like happy-dom) where `:disabled` does not propagate
+  // fieldset[disabled] to descendant form elements.
+  if (el.matches(":disabled") || el.closest("fieldset[disabled]")) return false;
+
+  // readOnly — only INPUT and TEXTAREA have this property per HTML spec
+  if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
+    if ((el as HTMLInputElement | HTMLTextAreaElement).readOnly) return false;
+  }
+
+  return true;
+}
+
 // Since the modern javascript frameworks detect changes through events
 // it's not as simple as just input.value = 'something'
-function fillInput(
+export function fillInput(
 	input: HTMLInputElement | HTMLTextAreaElement,
 	value: string,
 ) {
-	// File inputs cannot be set programmatically — browsers throw InvalidStateError
-	// Use tagName instead of instanceof for cross-document safety (Firefox Xray wrappers)
-	if (input.tagName === "INPUT" && input.type === "file") return;
+	// Skip disabled, readonly, fieldset-disabled, or file inputs
+	if (!isElementFillable(input)) return;
 
 	// Use the correct prototype setter based on element type
 	const prototype =
@@ -62,8 +96,8 @@ function fillInput(
 }
 
 export function fillSelect(select: HTMLSelectElement, value: string): boolean {
-	// Guard: disabled
-	if (select.disabled) {
+	// Guard: disabled / readonly / fieldset-disabled
+	if (!isElementFillable(select)) {
 		console.debug("[fake-my-forms] Skipped disabled select", select);
 		return false;
 	}
@@ -419,7 +453,11 @@ export function handleFrameworkDropdown(
  * Used as fallback when fieldType is unknown and no semantic value can be generated.
  */
 function fillSelectRandom(select: HTMLSelectElement): boolean {
-	if (select.disabled || select.multiple) return false;
+	if (!isElementFillable(select)) {
+		console.debug("[fake-my-forms] Skipped disabled select", select);
+		return false;
+	}
+	if (select.multiple) return false;
 	const validOptions = Array.from(select.options).filter(
 		(o) => !o.disabled && o.value !== "",
 	);
@@ -437,7 +475,10 @@ function fillSelectRandom(select: HTMLSelectElement): boolean {
  * to trigger framework change detection (React, Vue, etc.).
  * Mirrors the pattern used in fillInput() for the `value` property.
  */
-function fillCheckboxOrRadio(input: HTMLInputElement, checked: boolean) {
+export function fillCheckboxOrRadio(input: HTMLInputElement, checked: boolean) {
+	// Skip disabled or fieldset-disabled elements
+	if (!isElementFillable(input)) return;
+
 	const nativeCheckedSetter = Object.getOwnPropertyDescriptor(
 		window.HTMLInputElement.prototype,
 		"checked",
@@ -469,12 +510,12 @@ function processRadioGroups(doc: Document = document): number {
 	let filled = 0;
 
 	for (const radio of allRadios) {
-		if (processed.has(radio) || radio.disabled) continue;
+		if (processed.has(radio) || !isElementFillable(radio)) continue;
 
 		const group = detectRadioElement(radio, doc);
 		group.forEach((r) => processed.add(r));
 
-		const enabled = group.filter((r) => !r.disabled);
+		const enabled = group.filter((r) => isElementFillable(r));
 		if (enabled.length === 0) continue;
 
 		const picked = enabled[Math.floor(Math.random() * enabled.length)];
@@ -505,12 +546,12 @@ function processCheckboxGroups(doc: Document = document): number {
 	let filled = 0;
 
 	for (const cb of allCheckboxes) {
-		if (processed.has(cb) || cb.disabled) continue;
+		if (processed.has(cb) || !isElementFillable(cb)) continue;
 
 		const group = detectCheckboxElement(cb, doc);
 		group.forEach((c) => processed.add(c));
 
-		const enabled = group.filter((c) => !c.disabled);
+		const enabled = group.filter((c) => isElementFillable(c));
 		if (enabled.length === 0) continue;
 
 		// Random count between 0 and enabled.length (inclusive)
@@ -534,18 +575,22 @@ function processCheckboxGroups(doc: Document = document): number {
 }
 
 export function countFillableInDocument(doc: Document): number {
+	// CSS :not(:disabled) catches: disabled attr, disabled property
+	// CSS :not([readonly]) catches readonly attribute (programmatic .readOnly needs JS guard)
+	// CSS :not([multiple]) excludes multi-select from the count
+	//
+	// Note: [readonly] attr selector intentionally misses programmatic .readOnly —
+	// the JS guard in fillInput() handles that case at fill time.
+	//
+	// Supplementary JS filter for fieldset[disabled] descendants: happy-dom does
+	// NOT propagate fieldset[disabled] to :disabled in querySelectorAll, so we
+	// check closest() as a JS fallback.
 	const elements = doc.querySelectorAll(
-		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="file"]), textarea, select',
+		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="file"]):not(:disabled):not([readonly]), textarea:not(:disabled):not([readonly]), select:not(:disabled):not([multiple])',
 	);
-
-	// Filter out disabled and multiple selects (REQ-1)
-	// tagName for cross-document safety (Firefox Xray wrappers)
-	return Array.from(elements).filter((el) => {
-		if (el.tagName === "SELECT") {
-			return !(el as HTMLSelectElement).disabled && !(el as HTMLSelectElement).multiple;
-		}
-		return true;
-	}).length;
+	return Array.from(elements).filter(
+		(el) => !el.closest("fieldset[disabled]"),
+	).length;
 }
 
 export function countFillableInputs(): number {
@@ -608,15 +653,23 @@ function detectAndGenerate(
 ): { entries: PreviewEntry[]; groups: FieldValueGroup[] } {
 	const localePatterns = loadLocale(locale);
 
-	// Query fillable elements (same selector as the original fillDocument)
+	// Query fillable elements (same selector as the original fillDocument).
+	// CSS :not(:disabled) catches disabled attribute, property, and fieldset[disabled] descendants.
+	// CSS :not([readonly]) catches readonly attribute (programmatic .readOnly needs JS guard).
+	// CSS :not([multiple]) excludes multi-select from detection.
 	const elements = doc.querySelectorAll(
-		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]), textarea, select, [role="combobox"], [role="listbox"], .dropdown, .select-menu',
+		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:disabled):not([readonly]), textarea:not(:disabled):not([readonly]), select:not(:disabled):not([multiple]), [role="combobox"], [role="listbox"], .dropdown, .select-menu',
 	);
 
 	const fields: SemanticField[] = [];
 	let autoId = 0;
 
 	elements.forEach((el) => {
+		// Defense-in-depth: skip disabled/readonly/fieldset elements that CSS missed
+		// (e.g., programmatic .readOnly, environments where :disabled doesn't propagate
+		// fieldset[disabled] to descendants).
+		if (!isElementFillable(el)) return;
+
 		// Handle native select elements
 		if (el.tagName === "SELECT") {
 			const fieldType = detectSelectFieldType(el, locale);

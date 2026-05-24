@@ -14,12 +14,15 @@ mock.module("wxt/browser", () => ({
 };
 
 // Dynamic import AFTER mocks are in place
-const { fillSelect, handleFrameworkDropdown, fillAllInputs } = (await import(
+const { isElementFillable, fillSelect, handleFrameworkDropdown, fillAllInputs, fillInput, fillCheckboxOrRadio } = (await import(
   "../../src/entrypoints/content.ts"
 )) as {
+  isElementFillable: typeof import("../../src/entrypoints/content.ts").isElementFillable;
   fillSelect: typeof import("../../src/entrypoints/content.ts").fillSelect;
   handleFrameworkDropdown: typeof import("../../src/entrypoints/content.ts").handleFrameworkDropdown;
   fillAllInputs: typeof import("../../src/entrypoints/content.ts").fillAllInputs;
+  fillInput: typeof import("../../src/entrypoints/content.ts").fillInput;
+  fillCheckboxOrRadio: typeof import("../../src/entrypoints/content.ts").fillCheckboxOrRadio;
 };
 
 // ---------------------------------------------------------------------------
@@ -42,6 +45,187 @@ function makeSelect(options: { value: string; text: string }[], attrs: string = 
     .join("");
   return select;
 }
+
+// ---------------------------------------------------------------------------
+// isElementFillable — centralized guard for disabled/readonly elements
+// ---------------------------------------------------------------------------
+describe("isElementFillable", () => {
+  // --- True cases (fillable) ---
+
+  it("returns true for a normal text input", () => {
+    const input = document.createElement("input");
+    input.type = "text";
+    expect(isElementFillable(input)).toBe(true);
+  });
+
+  it("returns true for a normal textarea", () => {
+    const textarea = document.createElement("textarea");
+    expect(isElementFillable(textarea)).toBe(true);
+  });
+
+  it("returns true for a normal select", () => {
+    const select = document.createElement("select");
+    expect(isElementFillable(select)).toBe(true);
+  });
+
+  it("returns true for a normal div (non-form element)", () => {
+    const div = document.createElement("div");
+    expect(isElementFillable(div)).toBe(true);
+  });
+
+  // --- Disabled cases ---
+
+  it("returns false for a disabled input (attribute)", () => {
+    const input = document.createElement("input");
+    input.setAttribute("disabled", "");
+    expect(isElementFillable(input)).toBe(false);
+  });
+
+  it("returns false for a disabled textarea (attribute)", () => {
+    const textarea = document.createElement("textarea");
+    textarea.setAttribute("disabled", "");
+    expect(isElementFillable(textarea)).toBe(false);
+  });
+
+  it("returns false for a disabled select (attribute)", () => {
+    const select = document.createElement("select");
+    select.setAttribute("disabled", "");
+    expect(isElementFillable(select)).toBe(false);
+  });
+
+  // --- Readonly cases ---
+
+  it("returns false for a readonly input (attribute)", () => {
+    const input = document.createElement("input");
+    input.setAttribute("readonly", "");
+    expect(isElementFillable(input)).toBe(false);
+  });
+
+  it("returns false for a readonly textarea (attribute)", () => {
+    const textarea = document.createElement("textarea");
+    textarea.setAttribute("readonly", "");
+    expect(isElementFillable(textarea)).toBe(false);
+  });
+
+  // --- fieldset[disabled] case ---
+
+  it("returns false for an input inside a fieldset[disabled]", () => {
+    const fieldset = document.createElement("fieldset");
+    fieldset.setAttribute("disabled", "");
+    const input = document.createElement("input");
+    fieldset.appendChild(input);
+    // :disabled pseudo-class for fieldset descendants requires the
+    // element tree to be connected to the document
+    document.body.appendChild(fieldset);
+    expect(isElementFillable(input)).toBe(false);
+    document.body.removeChild(fieldset);
+  });
+
+  // --- Dynamically-set via JS property (no attribute) ---
+
+  it("returns false for an input dynamically disabled via JS property", () => {
+    const input = document.createElement("input");
+    input.disabled = true; // property only, no attribute
+    expect(isElementFillable(input)).toBe(false);
+  });
+
+  it("returns false for an input dynamically set readonly via JS property", () => {
+    const input = document.createElement("input");
+    input.readOnly = true; // property only, no attribute
+    expect(isElementFillable(input)).toBe(false);
+  });
+
+  // --- Select ignores readOnly ---
+
+  it("returns true for a select with readonly attribute (select has no readOnly)", () => {
+    const select = document.createElement("select");
+    select.setAttribute("readonly", "");
+    // SELECT elements do not have a readOnly property — the guard skips the check
+    expect(isElementFillable(select)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fillInput — guard behaviors for disabled/readonly elements
+// ---------------------------------------------------------------------------
+describe("fillInput — disabled/readonly guards (T2)", () => {
+  it("does NOT set value on disabled input", () => {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.setAttribute("disabled", "");
+    fillInput(input, "should-not-appear");
+    expect(input.value).toBe("");
+  });
+
+  it("does NOT set value on readonly input (attribute)", () => {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.setAttribute("readonly", "");
+    fillInput(input, "should-not-appear");
+    expect(input.value).toBe("");
+  });
+
+  it("does NOT set value on programmatically readonly input (no attribute)", () => {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.readOnly = true;
+    fillInput(input, "should-not-appear");
+    expect(input.value).toBe("");
+  });
+
+  it("does NOT set value on input inside fieldset[disabled]", () => {
+    const fieldset = document.createElement("fieldset");
+    fieldset.setAttribute("disabled", "");
+    const input = document.createElement("input");
+    input.type = "text";
+    fieldset.appendChild(input);
+    document.body.appendChild(fieldset);
+    fillInput(input, "should-not-appear");
+    expect(input.value).toBe("");
+    document.body.removeChild(fieldset);
+  });
+
+  it("STILL sets value on a normal input (regression check)", () => {
+    const input = document.createElement("input");
+    input.type = "text";
+    fillInput(input, "hello");
+    expect(input.value).toBe("hello");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fillCheckboxOrRadio — guard behaviors for disabled elements
+// ---------------------------------------------------------------------------
+describe("fillCheckboxOrRadio — disabled guard (T2)", () => {
+  it("does NOT check a disabled radio", () => {
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "test";
+    input.setAttribute("disabled", "");
+    fillCheckboxOrRadio(input, true);
+    expect(input.checked).toBe(false);
+  });
+
+  it("does NOT check a radio inside fieldset[disabled]", () => {
+    const fieldset = document.createElement("fieldset");
+    fieldset.setAttribute("disabled", "");
+    const input = document.createElement("input");
+    input.type = "radio";
+    fieldset.appendChild(input);
+    document.body.appendChild(fieldset);
+    fillCheckboxOrRadio(input, true);
+    expect(input.checked).toBe(false);
+    document.body.removeChild(fieldset);
+  });
+
+  it("STILL checks a normal enabled radio (regression check)", () => {
+    const input = document.createElement("input");
+    input.type = "radio";
+    input.name = "test";
+    fillCheckboxOrRadio(input, true);
+    expect(input.checked).toBe(true);
+  });
+});
 
 // ---------------------------------------------------------------------------
 // APPROVAL TESTS for T3: fillDocument extraction from fillAllInputs
