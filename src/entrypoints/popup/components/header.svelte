@@ -9,7 +9,13 @@
 </script>
 
 <header class="mainHeader">
-  <div class="logo">⚡</div>
+  <div class="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="28" height="28">
+      <rect width="128" height="128" rx="24" fill="#141420"/>
+      <rect width="128" height="128" rx="24" fill="none" stroke="#39ff8f" stroke-width="2" opacity="0.35"/>
+      <polygon points="72,18 48,68 66,68 56,110 82,58 64,58" fill="#39ff8f"/>
+    </svg>
+  </div>
   <div class="header-text">
     <h1 class="header-title">Fake my Forms</h1>
     <h3 class="header-sub">form autofill & faker</h3>
@@ -46,13 +52,12 @@
   .logo {
     width: 28px;
     height: 28px;
-    background: var(--accent);
-    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
     flex-shrink: 0;
+    border-radius: var(--radius-md);
+    overflow: hidden;
     box-shadow: 0 0 16px #00e5a055;
   }
 

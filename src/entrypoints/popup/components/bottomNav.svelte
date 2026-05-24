@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { TabDef, TabId } from "@/lib/types";
+  import TabIcon from "@/lib/icons/TabIcon.svelte";
 
   let {
     tabs,
@@ -21,7 +22,9 @@
       onclick={() => onTabChange(tab.id)}
       aria-current={activeTab === tab.id ? "true" : undefined}
     >
-      <span class="nav-icon">{tab.icon}</span>
+      <span class="nav-icon">
+        <TabIcon tabId={tab.id} />
+      </span>
       <span class="nav-label">{tab.label}</span>
     </button>
   {/each}
@@ -76,8 +79,11 @@
   }
 
   .nav-icon {
-    font-size: 16px;
-    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
   }
 
   .nav-label {

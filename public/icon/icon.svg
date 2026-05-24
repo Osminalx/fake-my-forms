@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Fondo -->
+  <rect width="128" height="128" rx="24" fill="#141420"/>
+  <!-- Borde sutil -->
+  <rect width="128" height="128" rx="24" fill="none" stroke="#39ff8f" stroke-width="2" opacity="0.35"/>
+  <!-- Rayo -->
+  <polygon points="72,18 48,68 66,68 56,110 82,58 64,58" fill="#39ff8f"/>
+</svg>

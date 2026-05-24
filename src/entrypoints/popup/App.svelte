@@ -15,10 +15,10 @@
   import Footer from "./components/footer.svelte";
 
   const TABS: TabDef[] = [
-    { id: "config", icon: "📋", label: "Config" },
-    { id: "preview", icon: "👁", label: "Preview" },
-    { id: "per-fill", icon: "✏️", label: "Per-Fill" },
-    { id: "settings", icon: "⚙️", label: "Settings" },
+    { id: "config", icon: "", label: "Config" },
+    { id: "preview", icon: "", label: "Preview" },
+    { id: "per-fill", icon: "", label: "Per-Fill" },
+    { id: "settings", icon: "", label: "Settings" },
   ];
 
   const customValues = $state<Record<string, CustomValueWeight[]>>(
