@@ -38,6 +38,28 @@ describe("detectSelectElementType", () => {
     expect(detectSelectElementType(div)).toBe("vue-dropdown");
   });
 
+  it("should NOT return 'vue-dropdown' for an INPUT with only data-v- (no combobox role)", () => {
+    const input = document.createElement("input");
+    input.setAttribute("data-v-c97e8b8c", "");
+    input.setAttribute("id", "name");
+    input.setAttribute("type", "text");
+    // Plain Vue-rendered input — NOT a dropdown
+    expect(detectSelectElementType(input)).toBeNull();
+  });
+
+  it("should return 'vue-dropdown' for an INPUT with data-v- AND role=combobox", () => {
+    const input = document.createElement("input");
+    input.setAttribute("data-v-123abc", "");
+    input.setAttribute("role", "combobox");
+    expect(detectSelectElementType(input)).toBe("vue-dropdown");
+  });
+
+  it("should NOT return 'vue-dropdown' for a TEXTAREA with only data-v-", () => {
+    const textarea = document.createElement("textarea");
+    textarea.setAttribute("data-v-123abc", "");
+    expect(detectSelectElementType(textarea)).toBeNull();
+  });
+
   it("should return 'vue-dropdown' for element with vue-select class", () => {
     const div = document.createElement("div");
     div.className = "vue-select";

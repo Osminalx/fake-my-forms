@@ -144,6 +144,16 @@ export function detectSelectElementType(
 		attr.name.startsWith("data-v-"),
 	);
 	if (hasVueDataAttr || "__vue__" in element) {
+		// For <input> and <textarea>, having data-v-* is NOT sufficient evidence
+		// of being a dropdown — ALL Vue-rendered elements carry these scope attributes.
+		// An <input> is only a dropdown if it also has role="combobox" or role="listbox".
+		// A <textarea> is never a dropdown.
+		if (element.tagName === "INPUT") {
+			const role = element.getAttribute("role");
+			if (role !== "combobox" && role !== "listbox") return null;
+		} else if (element.tagName === "TEXTAREA") {
+			return null;
+		}
 		return "vue-dropdown";
 	}
 

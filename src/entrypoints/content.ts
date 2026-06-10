@@ -173,6 +173,9 @@ export function fillSelect(select: HTMLSelectElement, value: string): boolean {
  * 1. aria-controls → getElementById → querySelectorAll('[role="option"]')
  * 2. Any [role="listbox"] in the document → its [role="option"] children
  * 3. Direct document-wide [role="option"] scan (catches all portals)
+ * 4. Custom Vue drop-down: .drop-down__item inside the nearest .drop-down wrapper
+ * 5. Flat document-wide .drop-down__item scan
+ * 6. Simple Vue drop-down: li items inside the element's .select container
  */
 function findDropdownOptions(element: HTMLElement, doc?: Document): Element[] {
 	const owner = doc ?? element.ownerDocument ?? document;
@@ -197,7 +200,28 @@ function findDropdownOptions(element: HTMLElement, doc?: Document): Element[] {
 	}
 
 	// 3. Flat document scan — some libraries don't nest options inside a listbox
-	return Array.from(owner.querySelectorAll('[role="option"]'));
+	const roleOptions = Array.from(owner.querySelectorAll('[role="option"]'));
+	if (roleOptions.length > 0) return roleOptions;
+
+	// 4. Custom Vue drop-down: look for .drop-down__item inside the nearest .drop-down ancestor
+	const dropDownRoot = element.closest('.drop-down');
+	if (dropDownRoot) {
+		const items = Array.from(dropDownRoot.querySelectorAll('.drop-down__item, .drop-down__list > *'));
+		if (items.length > 0) return items;
+	}
+
+	// 5. Flat document-wide .drop-down__item scan (multi-portal fallback)
+	const globalItems = Array.from(owner.querySelectorAll('.drop-down__item'));
+	if (globalItems.length > 0) return globalItems;
+
+	// 6. Simple Vue drop-down: scan for li items inside a .select container
+	const selectContainer = element.querySelector('.select') ?? dropDownRoot?.querySelector('.select');
+	if (selectContainer) {
+		const lis = Array.from(selectContainer.querySelectorAll('li, [data-value]'));
+		if (lis.length > 0) return lis;
+	}
+
+	return [];
 }
 
 /**
@@ -265,9 +289,15 @@ export function handleFrameworkDropdown(
 		// We do NOT type a search value here — we want ALL options visible so we can
 		// pick the best match. Typing a locale-specific generated value (e.g. an Arabic
 		// city name) would filter React Select's option list to zero results.
+		//
+		// For custom Vue drop-downs (class drop-down), the clickable target is
+		// usually an anchor or input-wrapper inside the container.
 		const control =
 			element.closest<HTMLElement>(
 				'[class*="-control"], [class*="__control"]',
+			) ??
+			element.querySelector<HTMLElement>(
+				'a.option-selected, .drop-down__input-wrapper, .drop-down__input',
 			) ??
 			element.parentElement ??
 			element;
@@ -355,6 +385,9 @@ export function handleFrameworkDropdown(
 					const retryControl =
 						element.closest<HTMLElement>(
 							'[class*="-control"], [class*="__control"]',
+						) ??
+						element.querySelector<HTMLElement>(
+							'a.option-selected, .drop-down__input-wrapper, .drop-down__input',
 						) ??
 						element.parentElement ??
 						element;
@@ -658,7 +691,7 @@ function detectAndGenerate(
 	// CSS :not([readonly]) catches readonly attribute (programmatic .readOnly needs JS guard).
 	// CSS :not([multiple]) excludes multi-select from detection.
 	const elements = doc.querySelectorAll(
-		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:disabled):not([readonly]), textarea:not(:disabled):not([readonly]), select:not(:disabled):not([multiple]), [role="combobox"], [role="listbox"], .dropdown, .select-menu',
+		'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]):not(:disabled):not([readonly]), textarea:not(:disabled):not([readonly]), select:not(:disabled):not([multiple]), [role="combobox"], [role="listbox"], .dropdown, .drop-down, .select-menu',
 	);
 
 	const fields: SemanticField[] = [];
